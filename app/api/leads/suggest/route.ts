@@ -3,11 +3,38 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 
+async function fetchWebsiteText(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 4000)
+    const res = await fetch(url.startsWith('http') ? url : `https://${url}`, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GrainBot/1.0)' },
+    })
+    clearTimeout(timer)
+    if (!res.ok) return null
+    const html = await res.text()
+    // Strip scripts, styles, and tags; collapse whitespace
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 3000)
+    // Discard WAF/bot-block pages (too short or known block patterns)
+    if (!text || text.length < 200 || /incident id|cloudflare|access denied|captcha/i.test(text)) return null
+    return text
+  } catch {
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { company, jobTitle, conferenceId, conferenceName } = await req.json()
+  const { company, jobTitle, conferenceId, conferenceName, website } = await req.json()
 
   const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
   const provider = cfg?.aiProvider || 'OPENAI'
@@ -16,6 +43,9 @@ export async function POST(req: NextRequest) {
   if (!apiKey) {
     return NextResponse.json({ suggestions: null, reason: 'no_key' })
   }
+
+  // Fetch company website in parallel with DB call (already done above)
+  const websiteText = website ? await fetchWebsiteText(website) : null
 
   const confContext = conferenceName ? ` attending ${conferenceName}` : conferenceId ? ' at an industry conference' : ''
 
@@ -27,22 +57,26 @@ When asked about a person's role at a company, provide:
 3. A suggested conversation or follow-up angle (1-2 sentences)
 4. A suggested person: if you know from your training data who holds (or recently held) this role at this company, return their name. Only give a real name you are confident about — do NOT fabricate. If uncertain, return null for firstName/lastName.
 
-Return your response as JSON:
+Return your response as JSON only — no prose, no code fences, just the object:
 {
   "context": "...",
   "icpRelevance": "...",
   "followUpAngle": "...",
   "suggestedPerson": {
-    "firstName": "Jane or null",
-    "lastName": "Smith or null",
+    "firstName": null,
+    "lastName": null,
     "confidence": "high|medium|low",
     "reasoning": "one sentence why you think this is them",
-    "linkedinHint": "linkedin.com/in/slug or null"
+    "linkedinHint": null
   }
 }`
 
+  const websiteSection = websiteText
+    ? `\n\nCompany website content (use this for accurate context):\n${websiteText}`
+    : ''
+
   const prompt = `Company: ${company}
-Role: ${jobTitle || 'Unknown'}${confContext}
+Role: ${jobTitle || 'Unknown'}${confContext}${websiteSection}
 
 Provide brief, actionable intelligence for a Grain sales rep meeting this person, and suggest who this person might be.`
 

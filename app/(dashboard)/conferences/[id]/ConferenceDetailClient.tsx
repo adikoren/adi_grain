@@ -944,7 +944,7 @@ function CompanyCard({ t, conferenceId, conferenceName }: {
       const res = await fetch('/api/leads/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company: t.company, jobTitle: t.contactRole || '', conferenceName }),
+        body: JSON.stringify({ company: t.company, jobTitle: t.contactRole || '', conferenceName, website: t.website }),
       })
       const data = await res.json()
       if (data.suggestions) {
