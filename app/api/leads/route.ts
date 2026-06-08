@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     where: isManager ? {} : { capturedById: session.user.id },
     include: {
       capturedBy: { select: { name: true } },
-      conferences: { include: { conference: { select: { id: true, name: true, startDate: true } } } },
+      conferences: { include: { conference: { select: { id: true, name: true, startDate: true } } }, orderBy: { capturedAt: 'desc' } },
       _count: { select: { matchesA: true, matchesB: true } },
     },
     orderBy: { capturedAt: 'desc' },

@@ -7,18 +7,19 @@ export default async function PlanningPage() {
   const session = await getServerSession(authOptions)
   const isManager = ['ADMIN', 'MANAGER'].includes(session!.user.role)
 
+  const now = new Date()
   const [conferences, users, assignments] = await Promise.all([
     db.conference.findMany({
-      where: { status: 'ELIGIBLE' },
+      where: { endDate: { gte: now } },
       include: { _count: { select: { leads: true } } },
       orderBy: { startDate: 'asc' },
     }),
     db.user.findMany({
-      where: { role: 'SALES_PERSON', isActive: true },
-      select: { id: true, name: true, email: true },
+      where: { isActive: true },
+      select: { id: true, name: true, email: true, role: true },
     }),
     db.conferenceAssignment.findMany({
-      include: { user: { select: { name: true } } },
+      include: { user: { select: { id: true, name: true } } },
     }),
   ])
 

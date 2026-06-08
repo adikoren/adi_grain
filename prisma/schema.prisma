@@ -168,6 +168,7 @@ model Lead {
   cardImageUrl     String?
   rawCardText      String?
   icpScore         Float?
+  tags             String   @default("[]")
   followUpDraft    String?
   hubspotContactId String?
   capturedById     String

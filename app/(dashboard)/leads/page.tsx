@@ -11,7 +11,7 @@ export default async function LeadsPage() {
     where: isManager ? {} : { capturedById: session!.user.id },
     include: {
       capturedBy: { select: { name: true } },
-      conferences: { include: { conference: { select: { name: true } } }, take: 1 },
+      conferences: { include: { conference: { select: { name: true } } } },
     },
     orderBy: { capturedAt: 'desc' },
   })

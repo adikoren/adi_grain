@@ -2,18 +2,90 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Fuse from 'fuse.js'
+import { leadTemperature } from '@/lib/icp-score'
 
-interface LeadMatch { id: string; firstName: string; lastName: string; company: string; score: number; conferences: string[] }
+interface LeadMatch {
+  id: string; firstName: string; lastName: string
+  company: string; jobTitle: string | null; email: string | null
+  icpScore: number | null; tags: string; hubspotContactId: string | null
+  conferences: Array<{ conference: { name: string; startDate: string }; engagementNotes: string | null; capturedAt: string }>
+}
+
+const WARMTH_CLS: Record<string, string> = {
+  Qualified: 'bg-emerald-100 text-emerald-700',
+  Warm:      'bg-amber-100 text-amber-700',
+  Cold:      'bg-slate-100 text-slate-500',
+}
+
+function RelationshipContext({ match }: { match: LeadMatch }) {
+  const tags: string[] = (() => { try { return JSON.parse(match.tags || '[]') } catch { return [] } })()
+  const warmth = leadTemperature(tags)
+  const confs = [...match.conferences].sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime())
+  const lastSeen = confs[0]
+
+  return (
+    <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-lg">🔔</span>
+        <div>
+          <p className="font-semibold text-sm text-amber-900">You've met {match.firstName} before!</p>
+          <p className="text-xs text-amber-700">
+            {match.company} · {match.jobTitle || 'Unknown role'} · met {confs.length}× at conference{confs.length > 1 ? 's' : ''}
+          </p>
+        </div>
+        <span className={`badge text-xs ml-auto ${WARMTH_CLS[warmth]}`}>{warmth}</span>
+      </div>
+
+      {/* Conference history */}
+      <div className="space-y-2">
+        {confs.map((c, i) => (
+          <div key={i} className="bg-white rounded-lg px-3 py-2 text-xs border border-amber-200">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-semibold text-content-primary">{c.conference.name}</span>
+              <span className="text-content-muted">{new Date(c.capturedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</span>
+            </div>
+            {c.engagementNotes && <p className="text-content-secondary italic">"{c.engagementNotes}"</p>}
+          </div>
+        ))}
+      </div>
+
+      {/* Tags */}
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.map(t => (
+            <span key={t} className="badge bg-white border border-amber-200 text-amber-800 text-xs">{t.replace('_', ' ')}</span>
+          ))}
+        </div>
+      )}
+
+      {match.hubspotContactId && (
+        <p className="text-xs text-emerald-700 font-medium">✓ Already in HubSpot ({match.hubspotContactId})</p>
+      )}
+
+      {lastSeen?.engagementNotes && (
+        <div className="bg-brand-navy/5 rounded-lg p-2.5 text-xs">
+          <p className="font-semibold text-content-primary mb-0.5">Recommended next action:</p>
+          <p className="text-content-secondary">
+            {warmth === 'Qualified' ? 'Push to demo — they\'re ready.' :
+             warmth === 'Warm' ? 'Continue conversation. Reference your last meeting and follow up on their pain points.' :
+             'Re-qualify. Check if situation has changed since you last met.'}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CapturePage() {
   const router = useRouter()
-  const [step, setStep] = useState<'scan' | 'form' | 'saving'>('form')
+  const [step, setStep] = useState<'form' | 'saving'>('form')
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', company: '', jobTitle: '', linkedinUrl: '', notes: '' })
   const [ocrRunning, setOcrRunning] = useState(false)
   const [rawText, setRawText] = useState('')
-  const [matches, setMatches] = useState<LeadMatch[]>([])
+  const [relationshipMatch, setRelationshipMatch] = useState<LeadMatch | null>(null)
+  const [otherMatches, setOtherMatches] = useState<LeadMatch[]>([])
   const [mergeLeadId, setMergeLeadId] = useState<string | null>(null)
-  const [allLeads, setAllLeads] = useState<any[]>([])
+  const [allLeads, setAllLeads] = useState<LeadMatch[]>([])
   const [currentConf, setCurrentConf] = useState<{ id: string; name: string } | null>(null)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -26,12 +98,42 @@ export default function CapturePage() {
   function updateForm(k: keyof typeof form, v: string) {
     const next = { ...form, [k]: v }
     setForm(next)
-    if (next.firstName && next.lastName && next.company && allLeads.length) {
+
+    if (allLeads.length === 0) return
+
+    // Email exact match first
+    if (next.email) {
+      const emailMatch = allLeads.find(l => l.email?.toLowerCase() === next.email.toLowerCase())
+      if (emailMatch) {
+        setRelationshipMatch(emailMatch)
+        setMergeLeadId(emailMatch.id)
+        setOtherMatches([])
+        return
+      }
+    }
+
+    // Fuzzy name + company match
+    if (next.firstName && next.lastName) {
       const fuse = new Fuse(allLeads, { keys: ['firstName', 'lastName', 'company'], threshold: 0.3 })
       const res = fuse.search(`${next.firstName} ${next.lastName} ${next.company}`).slice(0, 3)
-      setMatches(res.map(r => ({ ...r.item, score: Math.round((1 - (r.score || 0)) * 100) })))
+      const top = res[0]
+      if (top && (top.score || 1) < 0.4 && top.item.conferences.length > 0) {
+        setRelationshipMatch(top.item)
+        setMergeLeadId(top.item.id)
+        setOtherMatches(res.slice(1).map(r => r.item))
+      } else if (res.length > 0) {
+        setRelationshipMatch(null)
+        setMergeLeadId(null)
+        setOtherMatches(res.map(r => r.item))
+      } else {
+        setRelationshipMatch(null)
+        setMergeLeadId(null)
+        setOtherMatches([])
+      }
     } else {
-      setMatches([])
+      setRelationshipMatch(null)
+      setMergeLeadId(null)
+      setOtherMatches([])
     }
   }
 
@@ -59,13 +161,15 @@ export default function CapturePage() {
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
     const nameLine = lines[0] || ''
     const parts = nameLine.split(' ')
-    setForm(prev => ({
-      ...prev,
-      email: emailMatch?.[0] || prev.email,
-      phone: phoneMatch?.[0] || prev.phone,
-      firstName: parts[0] || prev.firstName,
-      lastName: parts.slice(1).join(' ') || prev.lastName,
-    }))
+    const next = {
+      ...form,
+      email: emailMatch?.[0] || form.email,
+      phone: phoneMatch?.[0] || form.phone,
+      firstName: parts[0] || form.firstName,
+      lastName: parts.slice(1).join(' ') || form.lastName,
+    }
+    setForm(next)
+    if (next.email) updateForm('email', next.email)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -105,6 +209,7 @@ export default function CapturePage() {
         </div>
       </div>
 
+      {/* Card scan */}
       <div className="card mb-4 border-dashed border-2 border-surface-border hover:border-brand-accent/50 transition-colors cursor-pointer" onClick={() => fileRef.current?.click()}>
         <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCardScan} />
         <div className="text-center py-2">
@@ -116,26 +221,43 @@ export default function CapturePage() {
         </div>
       </div>
 
-      {matches.length > 0 && (
-        <div className="card border-yellow-700/40 mb-4">
-          <p className="text-xs font-medium text-yellow-400 mb-2">Possible duplicate found</p>
-          {matches.map(m => (
-            <div key={m.id} className="flex items-center justify-between py-2 border-t border-surface-border first:border-0">
-              <div>
-                <p className="text-sm font-medium">{m.firstName} {m.lastName}</p>
-                <p className="text-xs text-content-muted">{m.company}</p>
-              </div>
-              <button onClick={() => setMergeLeadId(mergeLeadId === m.id ? null : m.id)}
-                className={`text-xs px-2 py-1 rounded transition-colors ${mergeLeadId === m.id ? 'bg-brand-accent text-brand-dark font-medium' : 'bg-surface-raised text-content-secondary hover:text-content-primary'}`}>
-                {mergeLeadId === m.id ? '✓ Linking' : 'Link'}
-              </button>
-            </div>
-          ))}
-          {mergeLeadId && <p className="text-xs text-brand-accent mt-2">Will add this conference encounter to the existing contact.</p>}
+      {/* Relationship context — rich card for known contacts */}
+      {relationshipMatch && (
+        <div className="mb-4">
+          <RelationshipContext match={relationshipMatch} />
+          <div className="mt-2 flex items-center gap-2">
+            <button onClick={() => { setMergeLeadId(relationshipMatch.id) }}
+              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${mergeLeadId === relationshipMatch.id ? 'bg-brand-navy text-white border-brand-navy' : 'bg-white text-content-secondary border-surface-border hover:border-brand-navy'}`}>
+              {mergeLeadId === relationshipMatch.id ? '✓ Add to their history' : 'Add to their history'}
+            </button>
+            <button onClick={() => { setMergeLeadId(null); setRelationshipMatch(null) }}
+              className="text-xs text-content-muted hover:text-content-primary">
+              Create new contact instead
+            </button>
+          </div>
         </div>
       )}
 
-      {error && <div className="mb-4 p-3 rounded-lg bg-red-900/30 border border-red-700/50 text-red-400 text-sm">{error}</div>}
+      {/* Light duplicate hints (no relationship history) */}
+      {!relationshipMatch && otherMatches.length > 0 && (
+        <div className="card border-amber-200 bg-amber-50/50 mb-4">
+          <p className="text-xs font-semibold text-amber-700 mb-2">Possible matches</p>
+          {otherMatches.map(m => (
+            <div key={m.id} className="flex items-center justify-between py-2 border-t border-amber-100 first:border-0">
+              <div>
+                <p className="text-sm font-medium text-content-primary">{m.firstName} {m.lastName}</p>
+                <p className="text-xs text-content-muted">{m.company} · {m.jobTitle || '—'}</p>
+              </div>
+              <button onClick={() => setMergeLeadId(mergeLeadId === m.id ? null : m.id)}
+                className={`text-xs px-2 py-1 rounded transition-colors ${mergeLeadId === m.id ? 'bg-brand-navy text-white font-medium' : 'bg-surface-raised text-content-secondary hover:text-content-primary'}`}>
+                {mergeLeadId === m.id ? '✓ Link' : 'Link'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">{error}</div>}
 
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div className="grid grid-cols-2 gap-3">
