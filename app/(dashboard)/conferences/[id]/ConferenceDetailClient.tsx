@@ -928,6 +928,7 @@ function CompanyCard({ t, conferenceId, conferenceName }: {
   const [intelOpen, setIntelOpen] = useState(false)
   const [intel, setIntel] = useState<CompanyIntel | null>(null)
   const [loadingIntel, setLoadingIntel] = useState(false)
+  const [intelError, setIntelError] = useState<'no_key' | 'ai_error' | null>(null)
 
   const hasStoredIntel = !!(t.description || t.relevanceReason)
 
@@ -938,16 +939,24 @@ function CompanyCard({ t, conferenceId, conferenceName }: {
 
   async function fetchIntel() {
     setLoadingIntel(true)
+    setIntelError(null)
     try {
       const res = await fetch('/api/leads/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company: t.company, jobTitle: '', conferenceName }),
+        body: JSON.stringify({ company: t.company, jobTitle: t.contactRole || '', conferenceName }),
       })
       const data = await res.json()
-      if (data.suggestions) setIntel(data.suggestions)
-    } catch { /* silently fail */ }
-    finally { setLoadingIntel(false) }
+      if (data.suggestions) {
+        setIntel(data.suggestions)
+      } else {
+        setIntelError(data.reason === 'no_key' ? 'no_key' : 'ai_error')
+      }
+    } catch {
+      setIntelError('ai_error')
+    } finally {
+      setLoadingIntel(false)
+    }
   }
 
   const shownIntel: CompanyIntel | null = intel || (hasStoredIntel ? {
@@ -1010,7 +1019,13 @@ function CompanyCard({ t, conferenceId, conferenceName }: {
               )}
             </>
           )}
-          {!loadingIntel && !shownIntel && (
+          {!loadingIntel && !shownIntel && intelError === 'no_key' && (
+            <p className="text-xs text-amber-700">AI not configured. Ask your admin to add an API key in Settings.</p>
+          )}
+          {!loadingIntel && !shownIntel && intelError === 'ai_error' && (
+            <p className="text-xs text-content-muted">Could not load intelligence. <button type="button" className="underline" onClick={fetchIntel}>Try again</button></p>
+          )}
+          {!loadingIntel && !shownIntel && !intelError && (
             <p className="text-xs text-content-muted">No intelligence available. <button type="button" className="underline" onClick={fetchIntel}>Try again</button></p>
           )}
         </div>

@@ -352,7 +352,7 @@ export default function CapturePage() {
       {error && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">{error}</div>}
 
       {/* AI person suggestion — shown when company + role are set and name not yet typed */}
-      {form.company && form.jobTitle && !form.firstName && !personSuggestionDismissed && (
+      {form.company && form.jobTitle && !form.firstName && !personSuggestionDismissed && (loadingPersonSuggestion || (personSuggestion && personSuggestion.firstName)) && (
         <div className="mb-4 rounded-xl border border-brand-navy/20 bg-brand-navy/5 overflow-hidden" data-testid="person-suggestion-card">
           {loadingPersonSuggestion ? (
             <div className="flex items-center gap-2 px-4 py-3 text-xs text-content-muted">
