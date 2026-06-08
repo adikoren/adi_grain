@@ -920,6 +920,132 @@ const SUGGESTED_ROLES = [
   'Head of Treasury', 'Partnerships Manager', 'Product Lead',
 ]
 
+interface CompanyIntel { context: string; icpRelevance: string; followUpAngle: string }
+
+function CompanyCard({ t, conferenceId, conferenceName }: {
+  t: TargetAccount; conferenceId: string; conferenceName: string
+}) {
+  const [intelOpen, setIntelOpen] = useState(false)
+  const [intel, setIntel] = useState<CompanyIntel | null>(null)
+  const [loadingIntel, setLoadingIntel] = useState(false)
+
+  const hasStoredIntel = !!(t.description || t.relevanceReason)
+
+  function captureUrl(company: string, jobTitle: string) {
+    const p = new URLSearchParams({ company, jobTitle, conferenceId, conferenceName })
+    return `/capture?${p.toString()}`
+  }
+
+  async function fetchIntel() {
+    setLoadingIntel(true)
+    try {
+      const res = await fetch('/api/leads/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company: t.company, jobTitle: '', conferenceName }),
+      })
+      const data = await res.json()
+      if (data.suggestions) setIntel(data.suggestions)
+    } catch { /* silently fail */ }
+    finally { setLoadingIntel(false) }
+  }
+
+  const shownIntel: CompanyIntel | null = intel || (hasStoredIntel ? {
+    context: t.description || '',
+    icpRelevance: t.relevanceReason || '',
+    followUpAngle: '',
+  } : null)
+
+  return (
+    <div className="space-y-2">
+      {/* Company header */}
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded bg-brand-navy/10 flex items-center justify-center text-[10px] font-bold text-brand-navy flex-shrink-0">
+          {t.company[0]?.toUpperCase()}
+        </div>
+        <span className="text-sm font-semibold text-content-primary">{t.company}</span>
+        <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
+        {/* Intel toggle */}
+        <button
+          type="button"
+          onClick={() => {
+            if (!intelOpen && !shownIntel && !loadingIntel) fetchIntel()
+            setIntelOpen(v => !v)
+          }}
+          className="text-[11px] font-medium px-2 py-0.5 rounded border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10 transition-colors"
+        >
+          {loadingIntel ? '…' : intelOpen ? '▲ Intel' : '✨ Intel'}
+        </button>
+        <Link
+          href={captureUrl(t.company, '')}
+          className="ml-auto text-[11px] font-medium px-2.5 py-1 rounded-full border border-brand-navy/30 bg-brand-navy/5 text-brand-navy hover:bg-brand-navy/10 transition-colors flex-shrink-0"
+        >
+          Add Lead →
+        </Link>
+      </div>
+
+      {/* Intel panel */}
+      {intelOpen && (
+        <div className="ml-8 rounded-xl border border-brand-accent/25 bg-brand-accent/5 p-3 space-y-2">
+          {loadingIntel && <p className="text-xs text-content-muted">Getting company intelligence…</p>}
+          {!loadingIntel && shownIntel && (
+            <>
+              {shownIntel.context && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Company Context</p>
+                  <p className="text-xs text-content-secondary leading-relaxed">{shownIntel.context}</p>
+                </div>
+              )}
+              {shownIntel.icpRelevance && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Why They Matter</p>
+                  <p className="text-xs text-content-secondary leading-relaxed">{shownIntel.icpRelevance}</p>
+                </div>
+              )}
+              {shownIntel.followUpAngle && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Follow-up Angle</p>
+                  <p className="text-xs text-content-secondary leading-relaxed">{shownIntel.followUpAngle}</p>
+                </div>
+              )}
+            </>
+          )}
+          {!loadingIntel && !shownIntel && (
+            <p className="text-xs text-content-muted">No intelligence available. <button type="button" className="underline" onClick={fetchIntel}>Try again</button></p>
+          )}
+        </div>
+      )}
+
+      {/* Known contact as primary chip */}
+      {t.contactName && t.contactRole && (
+        <Link
+          href={captureUrl(t.company, t.contactRole)}
+          className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border-2 border-brand-navy/30 bg-brand-navy/5 hover:bg-brand-navy/10 hover:border-brand-navy/50 transition-colors"
+        >
+          <div className="w-5 h-5 rounded-full bg-brand-navy flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
+            {t.contactName[0]?.toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-brand-navy leading-tight">{t.contactName}</p>
+            <p className="text-[10px] text-content-muted leading-tight">{t.contactRole}</p>
+          </div>
+          <span className="text-[10px] font-medium text-brand-navy flex-shrink-0">Fill form →</span>
+        </Link>
+      )}
+
+      {/* Generic role chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {SUGGESTED_ROLES.map(role => (
+          <Link key={role} href={captureUrl(t.company, role)}
+            className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-surface-border bg-white text-content-secondary hover:border-brand-accent/50 hover:text-brand-navy hover:bg-brand-navy/5 transition-colors">
+            + {role}
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function SuggestedLeadsPanel({ targets, conferenceId, conferenceName }: {
   targets: TargetAccount[]; conferenceId: string; conferenceName: string
 }) {
@@ -928,68 +1054,15 @@ function SuggestedLeadsPanel({ targets, conferenceId, conferenceName }: {
     return (order[a.priority as keyof typeof order] ?? 3) - (order[b.priority as keyof typeof order] ?? 3)
   })
 
-  function captureUrl(company: string, jobTitle: string) {
-    const p = new URLSearchParams({ company, jobTitle, conferenceId, conferenceName })
-    return `/capture?${p.toString()}`
-  }
-
   return (
     <div className="card space-y-4">
       <div>
         <h3 className="font-semibold text-sm text-content-primary">Suggested Leads</h3>
-        <p className="text-xs text-content-muted mt-0.5">Quick-fill the capture form for common roles at each target company</p>
+        <p className="text-xs text-content-muted mt-0.5">Click a role chip to open Add Lead pre-filled. Use ✨ Intel for company context before approaching.</p>
       </div>
-
       <div className="space-y-4">
         {sorted.map(t => (
-          <div key={t.id} className="space-y-2">
-            {/* Company header */}
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-brand-navy/10 flex items-center justify-center text-[10px] font-bold text-brand-navy flex-shrink-0">
-                {t.company[0]?.toUpperCase()}
-              </div>
-              <span className="text-sm font-semibold text-content-primary">{t.company}</span>
-              <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
-              <Link
-                href={captureUrl(t.company, '')}
-                className="ml-auto text-[11px] font-medium px-2.5 py-1 rounded-full border border-brand-navy/30 bg-brand-navy/5 text-brand-navy hover:bg-brand-navy/10 transition-colors flex-shrink-0"
-              >
-                Add Lead →
-              </Link>
-            </div>
-
-            {/* Description if available */}
-            {t.description && (
-              <p className="text-xs text-content-secondary leading-relaxed pl-8">{t.description}</p>
-            )}
-
-            {/* Known contact as primary chip */}
-            {t.contactName && t.contactRole && (
-              <Link
-                href={captureUrl(t.company, t.contactRole)}
-                className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border-2 border-brand-navy/30 bg-brand-navy/5 hover:bg-brand-navy/10 hover:border-brand-navy/50 transition-colors"
-              >
-                <div className="w-5 h-5 rounded-full bg-brand-navy flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
-                  {t.contactName[0]?.toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-brand-navy leading-tight">{t.contactName}</p>
-                  <p className="text-[10px] text-content-muted leading-tight">{t.contactRole}</p>
-                </div>
-                <span className="text-[10px] font-medium text-brand-navy flex-shrink-0">Fill form →</span>
-              </Link>
-            )}
-
-            {/* Generic role chips */}
-            <div className="flex flex-wrap gap-1.5">
-              {SUGGESTED_ROLES.map(role => (
-                <Link key={role} href={captureUrl(t.company, role)}
-                  className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-surface-border bg-white text-content-secondary hover:border-brand-accent/50 hover:text-brand-navy hover:bg-brand-navy/5 transition-colors">
-                  + {role}
-                </Link>
-              ))}
-            </div>
-          </div>
+          <CompanyCard key={t.id} t={t} conferenceId={conferenceId} conferenceName={conferenceName} />
         ))}
       </div>
     </div>

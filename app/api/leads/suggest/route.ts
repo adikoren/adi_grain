@@ -25,13 +25,26 @@ When asked about a person's role at a company, provide:
 1. Brief company context relevant to FX/payments (1-2 sentences)
 2. Why this role/company matters for Grain specifically (1-2 sentences)
 3. A suggested conversation or follow-up angle (1-2 sentences)
+4. A suggested person: if you know from your training data who holds (or recently held) this role at this company, return their name. Only give a real name you are confident about — do NOT fabricate. If uncertain, return null for firstName/lastName.
 
-Return your response as JSON: { "context": "...", "icpRelevance": "...", "followUpAngle": "..." }`
+Return your response as JSON:
+{
+  "context": "...",
+  "icpRelevance": "...",
+  "followUpAngle": "...",
+  "suggestedPerson": {
+    "firstName": "Jane or null",
+    "lastName": "Smith or null",
+    "confidence": "high|medium|low",
+    "reasoning": "one sentence why you think this is them",
+    "linkedinHint": "linkedin.com/in/slug or null"
+  }
+}`
 
   const prompt = `Company: ${company}
 Role: ${jobTitle || 'Unknown'}${confContext}
 
-Provide brief, actionable intelligence for a Grain sales rep meeting this person.`
+Provide brief, actionable intelligence for a Grain sales rep meeting this person, and suggest who this person might be.`
 
   try {
     let raw: string

@@ -107,10 +107,13 @@ export default function CapturePage() {
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false)
   const companyRef = useRef<HTMLDivElement>(null)
 
-  // AI suggestion state
-  const [aiSuggestion, setAiSuggestion] = useState<{ context: string; icpRelevance: string; followUpAngle: string } | null>(null)
-  const [loadingAiSuggestion, setLoadingAiSuggestion] = useState(false)
-  const [aiDismissed, setAiDismissed] = useState(false)
+  // AI person-suggestion state
+  const [personSuggestion, setPersonSuggestion] = useState<{
+    firstName: string | null; lastName: string | null
+    confidence: string; reasoning: string; linkedinHint: string | null
+  } | null>(null)
+  const [loadingPersonSuggestion, setLoadingPersonSuggestion] = useState(false)
+  const [personSuggestionDismissed, setPersonSuggestionDismissed] = useState(false)
 
   const confIdFromUrl = params.get('conferenceId')
 
@@ -150,10 +153,10 @@ export default function CapturePage() {
     const next = { ...form, [k]: v }
     setForm(next)
 
-    // Clear AI suggestion when company changes
-    if (k === 'company') {
-      setAiSuggestion(null)
-      setAiDismissed(false)
+    // Clear person suggestion when company or jobTitle changes
+    if (k === 'company' || k === 'jobTitle') {
+      setPersonSuggestion(null)
+      setPersonSuggestionDismissed(false)
     }
 
     if (allLeads.length === 0) return
@@ -229,35 +232,34 @@ export default function CapturePage() {
     if (next.email) updateForm('email', next.email)
   }
 
-  async function handleGetAiSuggestion() {
-    if (!form.company || !form.jobTitle) return
-    setLoadingAiSuggestion(true)
-    setAiSuggestion(null)
+  async function fetchPersonSuggestion(company: string, jobTitle: string) {
+    if (!company || !jobTitle) return
+    setLoadingPersonSuggestion(true)
+    setPersonSuggestion(null)
     try {
       const res = await fetch('/api/leads/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company: form.company,
-          jobTitle: form.jobTitle,
-          conferenceId: currentConf?.id,
-          conferenceName: currentConf?.name,
-        }),
+        body: JSON.stringify({ company, jobTitle, conferenceId: currentConf?.id, conferenceName: currentConf?.name }),
       })
       const data = await res.json()
-      if (data.suggestions) {
-        setAiSuggestion(data.suggestions)
-        setAiDismissed(false)
-      } else if (data.reason === 'no_key') {
-        setAiSuggestion({ context: 'AI key not configured', icpRelevance: '', followUpAngle: '' })
-        setAiDismissed(false)
+      if (data.suggestions?.suggestedPerson) {
+        setPersonSuggestion(data.suggestions.suggestedPerson)
+        setPersonSuggestionDismissed(false)
       }
-    } catch {
-      // silently fail
-    } finally {
-      setLoadingAiSuggestion(false)
-    }
+    } catch { /* silently fail */ }
+    finally { setLoadingPersonSuggestion(false) }
   }
+
+  // Auto-fire person suggestion when both company + jobTitle are pre-filled from URL params
+  useEffect(() => {
+    const urlCompany  = params.get('company')
+    const urlJobTitle = params.get('jobTitle')
+    if (urlCompany && urlJobTitle) {
+      fetchPersonSuggestion(urlCompany, urlJobTitle)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentConf])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -349,6 +351,69 @@ export default function CapturePage() {
 
       {error && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">{error}</div>}
 
+      {/* AI person suggestion — shown when company + role are set and name not yet typed */}
+      {form.company && form.jobTitle && !form.firstName && !personSuggestionDismissed && (
+        <div className="mb-4 rounded-xl border border-brand-navy/20 bg-brand-navy/5 overflow-hidden" data-testid="person-suggestion-card">
+          {loadingPersonSuggestion ? (
+            <div className="flex items-center gap-2 px-4 py-3 text-xs text-content-muted">
+              <div className="w-3.5 h-3.5 border border-brand-navy/40 border-t-transparent rounded-full animate-spin" />
+              Finding who this might be…
+            </div>
+          ) : personSuggestion && personSuggestion.firstName ? (
+            <>
+              <div className="px-4 pt-3 pb-1">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-2">We think you might be meeting</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-brand-navy/15 flex items-center justify-center text-sm font-bold text-brand-navy flex-shrink-0">
+                    {personSuggestion.firstName[0]}{personSuggestion.lastName?.[0] || ''}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-content-primary">{personSuggestion.firstName} {personSuggestion.lastName}</p>
+                    <p className="text-xs text-content-muted">{form.jobTitle} · {form.company}</p>
+                    {personSuggestion.reasoning && (
+                      <p className="text-[11px] text-content-muted mt-0.5 italic">{personSuggestion.reasoning}</p>
+                    )}
+                  </div>
+                  <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${
+                    personSuggestion.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' :
+                    personSuggestion.confidence === 'medium' ? 'bg-amber-100 text-amber-700' :
+                    'bg-slate-100 text-slate-500'
+                  }`}>{personSuggestion.confidence}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2.5 border-t border-brand-navy/10">
+                <button
+                  type="button"
+                  data-testid="person-suggestion-accept"
+                  onClick={() => {
+                    setForm(f => ({
+                      ...f,
+                      firstName: personSuggestion.firstName || f.firstName,
+                      lastName: personSuggestion.lastName || f.lastName,
+                      linkedinUrl: personSuggestion.linkedinHint
+                        ? `https://${personSuggestion.linkedinHint.replace(/^https?:\/\//, '')}`
+                        : f.linkedinUrl,
+                    }))
+                    setPersonSuggestionDismissed(true)
+                  }}
+                  className="text-xs bg-brand-navy text-white px-3 py-1.5 rounded-lg font-medium hover:bg-brand-navy/90 transition-colors"
+                >
+                  Yes, that's them →
+                </button>
+                <button
+                  type="button"
+                  data-testid="person-suggestion-dismiss"
+                  onClick={() => setPersonSuggestionDismissed(true)}
+                  className="text-xs text-content-muted hover:text-content-primary"
+                >
+                  Someone else
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div><label htmlFor="cap-firstName" className="label">First name *</label><input id="cap-firstName" className="input" value={form.firstName} onChange={e => updateForm('firstName', e.target.value)} /></div>
@@ -381,8 +446,6 @@ export default function CapturePage() {
                         e.preventDefault()
                         updateForm('company', c)
                         setShowCompanyDropdown(false)
-                        setAiSuggestion(null)
-                        setAiDismissed(false)
                       }}
                     >
                       {c}
@@ -415,63 +478,6 @@ export default function CapturePage() {
           </div>
           <input id="cap-jobTitle" className="input" value={form.jobTitle} onChange={e => updateForm('jobTitle', e.target.value)} />
         </div>
-
-        {/* AI suggestion panel — shown after company + jobTitle filled */}
-        {form.company && form.jobTitle && !aiDismissed && (
-          <div>
-            {!aiSuggestion && (
-              <button
-                type="button"
-                onClick={handleGetAiSuggestion}
-                disabled={loadingAiSuggestion}
-                className="text-xs text-brand-accent hover:text-brand-navy flex items-center gap-1.5 transition-colors"
-                data-testid="ai-suggest-btn"
-              >
-                {loadingAiSuggestion ? (
-                  <><div className="w-3.5 h-3.5 border border-brand-accent border-t-transparent rounded-full animate-spin" /> Getting AI context…</>
-                ) : (
-                  <>✨ Get AI context</>
-                )}
-              </button>
-            )}
-            {aiSuggestion && (
-              <div className="rounded-xl border border-brand-accent/30 bg-brand-accent/5 p-3 space-y-2 relative" data-testid="ai-suggestion-panel">
-                <button
-                  type="button"
-                  onClick={() => { setAiDismissed(true); setAiSuggestion(null) }}
-                  className="absolute top-2 right-2 text-content-muted hover:text-content-primary text-base leading-none"
-                  aria-label="Dismiss AI panel"
-                >
-                  ×
-                </button>
-                {aiSuggestion.context === 'AI key not configured' ? (
-                  <p className="text-xs text-amber-600">AI key not configured</p>
-                ) : (
-                  <>
-                    {aiSuggestion.context && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Company context</p>
-                        <p className="text-xs text-content-secondary">{aiSuggestion.context}</p>
-                      </div>
-                    )}
-                    {aiSuggestion.icpRelevance && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Why they matter</p>
-                        <p className="text-xs text-content-secondary">{aiSuggestion.icpRelevance}</p>
-                      </div>
-                    )}
-                    {aiSuggestion.followUpAngle && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Follow-up angle</p>
-                        <p className="text-xs text-content-secondary">{aiSuggestion.followUpAngle}</p>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         <div><label htmlFor="cap-email" className="label">Email</label><input id="cap-email" className="input" type="email" value={form.email} onChange={e => updateForm('email', e.target.value)} /></div>
         <div><label htmlFor="cap-phone" className="label">Phone</label><input id="cap-phone" className="input" type="tel" value={form.phone} onChange={e => updateForm('phone', e.target.value)} /></div>

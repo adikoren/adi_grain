@@ -267,14 +267,14 @@ _(mirrors api-auth.test.ts with additional bcrypt and trim coverage)_
 - includes / excludes mergeLeadId correctly
 - redirects to / on success; shows error on failure
 
-**Company autocomplete** (7 tests)
+**Company autocomplete + person suggestion** (7 tests)
 - suggestions appear when typing
 - clicking a suggestion fills the company field
 - job title chip buttons are shown
 - clicking a chip sets the job title
-- AI suggestion panel appears after both company and jobTitle are filled
-- AI panel shows context, icpRelevance, followUpAngle
-- AI panel can be dismissed
+- person suggestion card appears when URL has both company and jobTitle
+- accepting suggestion fills firstName and lastName
+- dismissing suggestion removes the card
 
 **Business card scan (OCR)** (11 tests)
 - no spinner before scan; shows "Scanning card…" during processing; hides after

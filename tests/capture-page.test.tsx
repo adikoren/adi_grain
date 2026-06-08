@@ -698,69 +698,58 @@ describe('CapturePage — company autocomplete', () => {
     })
   })
 
-  it('AI suggestion panel appears after both company and jobTitle are filled (mock /api/leads/suggest)', async () => {
-    const user = userEvent.setup()
+  it('person suggestion card appears when URL has both company and jobTitle', async () => {
+    mockSearchParams = new URLSearchParams('company=Stripe&jobTitle=CFO')
     mockFetch.mockImplementation(async (url: string, opts?: any) => {
-      if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: ['Stripe'] }) }
       if (url.includes('/api/leads/suggest')) return { ok: true, json: async () => ({
-        suggestions: { context: 'Stripe processes payments', icpRelevance: 'High FX relevance', followUpAngle: 'Discuss hedging solutions' }
+        suggestions: { suggestedPerson: { firstName: 'Jane', lastName: 'Doe', confidence: 'high', reasoning: 'Known CFO at Stripe', linkedinHint: null } }
       })}
+      if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: ['Stripe'] }) }
       if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads: [] }) }
       if (url.includes('/api/users/current-conference')) return { ok: true, json: async () => ({ conference: { id: 'conf1', name: 'FinTech World' } }) }
       return { ok: true, json: async () => ({}) }
     })
     render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Company */i)).toBeInTheDocument())
-    await user.type(screen.getByLabelText(/Company */i), 'Stripe')
-    await user.type(screen.getByLabelText(/Job title/i), 'CFO')
-    // AI button should appear
-    await waitFor(() => expect(screen.getByText(/✨ Get AI context/)).toBeInTheDocument())
-    await user.click(screen.getByText(/✨ Get AI context/))
-    await waitFor(() => expect(screen.getByTestId('ai-suggestion-panel')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('person-suggestion-card')).toBeInTheDocument())
+    expect(screen.getByText(/Jane Doe/)).toBeInTheDocument()
   })
 
-  it('AI panel shows context, icpRelevance, followUpAngle', async () => {
+  it('accepting person suggestion fills firstName and lastName', async () => {
     const user = userEvent.setup()
+    mockSearchParams = new URLSearchParams('company=Adyen&jobTitle=CFO')
     mockFetch.mockImplementation(async (url: string, opts?: any) => {
-      if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: [] }) }
       if (url.includes('/api/leads/suggest')) return { ok: true, json: async () => ({
-        suggestions: { context: 'Company context here', icpRelevance: 'FX exposure high', followUpAngle: 'Ask about hedging' }
+        suggestions: { suggestedPerson: { firstName: 'Tom', lastName: 'Wilson', confidence: 'medium', reasoning: 'Likely CFO at Adyen', linkedinHint: null } }
       })}
+      if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: [] }) }
+      if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads: [] }) }
+      if (url.includes('/api/users/current-conference')) return { ok: true, json: async () => ({ conference: { id: 'c1', name: 'Sibos' } }) }
+      return { ok: true, json: async () => ({}) }
+    })
+    render(<CapturePage />)
+    await waitFor(() => expect(screen.getByTestId('person-suggestion-accept')).toBeInTheDocument())
+    await user.click(screen.getByTestId('person-suggestion-accept'))
+    await waitFor(() => {
+      expect((screen.getByLabelText(/First name \*/i) as HTMLInputElement).value).toBe('Tom')
+      expect((screen.getByLabelText(/Last name \*/i) as HTMLInputElement).value).toBe('Wilson')
+    })
+  })
+
+  it('dismissing person suggestion removes the card', async () => {
+    const user = userEvent.setup()
+    mockSearchParams = new URLSearchParams('company=Revolut&jobTitle=COO')
+    mockFetch.mockImplementation(async (url: string, opts?: any) => {
+      if (url.includes('/api/leads/suggest')) return { ok: true, json: async () => ({
+        suggestions: { suggestedPerson: { firstName: 'Anna', lastName: 'Keller', confidence: 'low', reasoning: 'Possible COO', linkedinHint: null } }
+      })}
+      if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: [] }) }
       if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads: [] }) }
       if (url.includes('/api/users/current-conference')) return { ok: true, json: async () => ({ conference: null }) }
       return { ok: true, json: async () => ({}) }
     })
     render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Company */i)).toBeInTheDocument())
-    await user.type(screen.getByLabelText(/Company */i), 'Acme')
-    await user.type(screen.getByLabelText(/Job title/i), 'CFO')
-    await waitFor(() => expect(screen.getByText(/✨ Get AI context/)).toBeInTheDocument())
-    await user.click(screen.getByText(/✨ Get AI context/))
-    await waitFor(() => expect(screen.getByText('Company context here')).toBeInTheDocument())
-    expect(screen.getByText('FX exposure high')).toBeInTheDocument()
-    expect(screen.getByText('Ask about hedging')).toBeInTheDocument()
-  })
-
-  it('AI panel can be dismissed', async () => {
-    const user = userEvent.setup()
-    mockFetch.mockImplementation(async (url: string, opts?: any) => {
-      if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: [] }) }
-      if (url.includes('/api/leads/suggest')) return { ok: true, json: async () => ({
-        suggestions: { context: 'Some context', icpRelevance: 'Relevant', followUpAngle: 'Follow up' }
-      })}
-      if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads: [] }) }
-      if (url.includes('/api/users/current-conference')) return { ok: true, json: async () => ({ conference: null }) }
-      return { ok: true, json: async () => ({}) }
-    })
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Company */i)).toBeInTheDocument())
-    await user.type(screen.getByLabelText(/Company */i), 'Acme')
-    await user.type(screen.getByLabelText(/Job title/i), 'CFO')
-    await waitFor(() => expect(screen.getByText(/✨ Get AI context/)).toBeInTheDocument())
-    await user.click(screen.getByText(/✨ Get AI context/))
-    await waitFor(() => expect(screen.getByTestId('ai-suggestion-panel')).toBeInTheDocument())
-    // Click dismiss button
-    await user.click(screen.getByLabelText('Dismiss AI panel'))
-    await waitFor(() => expect(screen.queryByTestId('ai-suggestion-panel')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('person-suggestion-dismiss')).toBeInTheDocument())
+    await user.click(screen.getByTestId('person-suggestion-dismiss'))
+    await waitFor(() => expect(screen.queryByTestId('person-suggestion-card')).not.toBeInTheDocument())
   })
 })
