@@ -89,8 +89,10 @@ Provide brief, actionable intelligence for a Grain sales rep meeting this person
       raw = data.choices[0].message.content
     }
 
-    const cleaned = raw.replace(/```json|```/g, '').trim()
-    const suggestions = JSON.parse(cleaned)
+    // Extract the JSON object — AI sometimes appends extra text after the closing fence
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('No JSON object in AI response')
+    const suggestions = JSON.parse(jsonMatch[0])
     return NextResponse.json({ suggestions })
   } catch (err) {
     return NextResponse.json({ suggestions: null, reason: 'ai_error', error: String(err) })
