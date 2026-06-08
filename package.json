@@ -1,0 +1,56 @@
+{
+  "name": "grain-conference-intel",
+  "version": "1.0.0",
+  "description": "Conference Intelligence Tool for Grain Sales Team",
+  "private": true,
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@next/swc-darwin-arm64": "^16.2.7",
+    "@prisma/client": "^5.10.0",
+    "@types/nodemailer": "^8.0.0",
+    "bcryptjs": "^2.4.3",
+    "fuse.js": "^7.0.0",
+    "next": "14.1.0",
+    "next-auth": "^4.24.5",
+    "nodemailer": "^7.0.13",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "resend": "^6.12.4",
+    "tesseract.js": "^5.0.4",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.11.5",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^4.1.8",
+    "autoprefixer": "^10.4.17",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.4.33",
+    "prisma": "^5.10.0",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.8"
+  }
+}
