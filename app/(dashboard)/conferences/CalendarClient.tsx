@@ -94,7 +94,7 @@ export default function ConferenceCalendarClient({ conferences, isManager, myCon
           <p className="text-content-muted text-sm mt-0.5">{monthConferences.length} conferences this month</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/manager/planning" className="btn-secondary text-sm">List view</Link>
+          <Link href="/conferences/all" className="btn-secondary text-sm">List view</Link>
           {isManager && (
             <Link href="/manager/conferences/new" className="btn-primary text-sm">+ Add</Link>
           )}

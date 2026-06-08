@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 interface Props {
   user: { name: string; role: string; currentConferenceId?: string | null }
-  eligibleConferences: Array<{ id: string; name: string; city: string; country: string; startDate: Date; endDate: Date }>
+  myConferences: Array<{ id: string; name: string; city: string; country: string; startDate: Date; endDate: Date }>
   todayLeads: Array<{ id: string; firstName: string; lastName: string; company: string; capturedAt: Date; conferences: Array<{ conference: { name: string } }> }>
   assignments: Array<{ id: string; name: string; city: string; country: string; startDate: Date }>
   totalLeads: number
@@ -28,12 +28,14 @@ function daysUntil(date: Date) {
   return `${diff}d away`
 }
 
-export default function DashboardClient({ user, eligibleConferences, todayLeads, assignments, totalLeads }: Props) {
+export default function DashboardClient({ user, myConferences, todayLeads, assignments, totalLeads }: Props) {
   const router = useRouter()
   const [currentConfId, setCurrentConfId] = useState(user.currentConferenceId || '')
   const [saving, setSaving] = useState(false)
 
-  const currentConf = eligibleConferences.find(c => c.id === currentConfId)
+  const currentConf = myConferences.find(c => c.id === currentConfId) ?? null
+  // Clear stale ID if the conference is no longer in assignments
+  if (currentConfId && !currentConf) { setCurrentConfId('') }
   const nextConf = assignments.find(c => new Date(c.startDate) > new Date())
   const daysToNext = nextConf ? daysUntil(new Date(nextConf.startDate)) : null
 
@@ -110,7 +112,7 @@ export default function DashboardClient({ user, eligibleConferences, todayLeads,
             className="w-full bg-white/10 border border-white/20 text-white text-xs rounded-md px-2 py-1.5 focus:outline-none focus:border-brand-accent"
           >
             <option value="">— Not at a conference —</option>
-            {eligibleConferences.map(c => (
+            {myConferences.map(c => (
               <option key={c.id} value={c.id}>{c.name} · {c.city}</option>
             ))}
           </select>

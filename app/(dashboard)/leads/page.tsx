@@ -10,7 +10,7 @@ export default async function LeadsPage() {
   const leads = await db.lead.findMany({
     where: isManager ? {} : { capturedById: session!.user.id },
     include: {
-      capturedBy: { select: { name: true } },
+      capturedBy: { select: { id: true, name: true } },
       conferences: { include: { conference: { select: { name: true } } } },
     },
     orderBy: { capturedAt: 'desc' },

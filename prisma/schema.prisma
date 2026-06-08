@@ -16,6 +16,8 @@ model User {
   role                String   @default("SALES_PERSON")
   currentConferenceId String?
   isActive            Boolean  @default(true)
+  inviteToken         String?  @unique
+  inviteExpiry        DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

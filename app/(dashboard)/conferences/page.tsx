@@ -9,7 +9,6 @@ export default async function ConferencesCalendarPage() {
 
   const [conferences, myAssignments] = await Promise.all([
     db.conference.findMany({
-      where: { status: { in: ['ELIGIBLE', 'DRAFT'] } },
       orderBy: { startDate: 'asc' },
       include: {
         assignments: { include: { user: { select: { id: true, name: true } } } },

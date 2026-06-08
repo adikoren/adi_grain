@@ -18,7 +18,7 @@ async function callLLM(prompt: string, systemPrompt: string): Promise<string> {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: systemPrompt,
         messages: [{ role: 'user', content: prompt }],
@@ -59,7 +59,10 @@ export async function draftFollowUpEmail(lead: {
   jobTitle?: string | null
   notes?: string | null
   conferenceName?: string
+  repName?: string | null
 }): Promise<string> {
+  const signOff = lead.repName || 'The Grain Team'
+
   const system = `You are an expert B2B sales rep at Grain, a fintech company that helps businesses
 manage FX (foreign exchange) risk through embedded hedging. Write concise, warm,
 personalised follow-up emails. Keep under 150 words. No fluff.`
@@ -68,7 +71,7 @@ personalised follow-up emails. Keep under 150 words. No fluff.`
 ${lead.jobTitle || 'professional'} at ${lead.company},
 met at ${lead.conferenceName || 'a conference'}.
 Notes from meeting: ${lead.notes || 'General interest in FX risk management'}.
-Sign off as "The Grain Team". Subject line included.`
+Sign off with the sender's name: "${signOff}". Subject line included.`
 
   return callLLM(prompt, system)
 }

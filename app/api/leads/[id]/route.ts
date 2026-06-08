@@ -34,13 +34,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const lead = await db.lead.findUnique({
     where: { id: params.id },
-    include: { conferences: { include: { conference: { select: { name: true, startDate: true } } } } },
+    include: {
+      capturedBy: { select: { name: true } },
+      conferences: {
+        include: { conference: { select: { name: true, startDate: true } } },
+        orderBy: { capturedAt: 'desc' },
+      },
+    },
   })
   if (!lead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (action === 'draft-followup') {
-    const conferenceName = lead.conferences[0]?.conference?.name
-    const draft = await draftFollowUpEmail({ ...lead, conferenceName })
+    const lastConf = lead.conferences[0]
+    const conferenceName = lastConf?.conference?.name
+    const repName = lead.capturedBy?.name || session.user.name
+    const draft = await draftFollowUpEmail({ ...lead, conferenceName, repName })
     await db.lead.update({ where: { id: params.id }, data: { followUpDraft: draft } })
     return NextResponse.json({ draft })
   }

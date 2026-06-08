@@ -29,14 +29,6 @@ export const authOptions: NextAuthOptions = {
         const user = await db.user.findUnique({ where: { email } })
         if (!user || !user.passwordHash || !user.isActive) return null
 
-        // Check invitation (skip for admin)
-        if (user.role !== 'ADMIN') {
-          const invite = await db.invitation.findFirst({
-            where: { email, status: 'ACCEPTED' },
-          })
-          if (!invite) return null
-        }
-
         const valid = await bcrypt.compare(credentials.password, user.passwordHash)
         if (!valid) return null
 

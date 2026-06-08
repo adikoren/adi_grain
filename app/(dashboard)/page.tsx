@@ -10,12 +10,6 @@ export default async function DashboardPage() {
 
   const user = await db.user.findUnique({ where: { id: session.user.id } })
 
-  const eligibleConferences = await db.conference.findMany({
-    where: { status: 'ELIGIBLE' },
-    orderBy: { startDate: 'asc' },
-    select: { id: true, name: true, city: true, country: true, startDate: true, endDate: true },
-  })
-
   const todayLeads = await db.lead.findMany({
     where: {
       capturedById: session.user.id,
@@ -28,18 +22,19 @@ export default async function DashboardPage() {
 
   const assignments = await db.conferenceAssignment.findMany({
     where: { userId: session.user.id },
-    include: { conference: { select: { id: true, name: true, city: true, country: true, startDate: true } } },
+    include: { conference: { select: { id: true, name: true, city: true, country: true, startDate: true, endDate: true } } },
     orderBy: { conference: { startDate: 'asc' } },
   })
 
   const totalLeads = await db.lead.count({ where: { capturedById: session.user.id } })
+  const myConferences = assignments.map(a => a.conference)
 
   return (
     <DashboardClient
       user={{ name: session.user.name, role: session.user.role, currentConferenceId: user?.currentConferenceId }}
-      eligibleConferences={eligibleConferences}
+      myConferences={myConferences}
       todayLeads={todayLeads}
-      assignments={assignments.map(a => a.conference)}
+      assignments={myConferences}
       totalLeads={totalLeads}
     />
   )

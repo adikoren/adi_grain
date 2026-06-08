@@ -105,7 +105,13 @@ export default function LeadsClient({ leads, isManager }: { leads: any[]; isMana
                   <td className="px-4 py-3">
                     <span className={`badge text-xs ${badge.className}`}>{badge.label}</span>
                   </td>
-                  {isManager && <td className="px-4 py-3 text-content-muted text-xs">{lead.capturedBy?.name || '—'}</td>}
+                  {isManager && (
+                    <td className="px-4 py-3 text-xs">
+                      {lead.capturedBy
+                        ? <Link href={`/users/${lead.capturedBy.id}`} className="text-brand-accent hover:underline">{lead.capturedBy.name}</Link>
+                        : <span className="text-content-muted">—</span>}
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     {lead.hubspotContactId
                       ? <span className="text-xs text-emerald-600 font-medium">✓ Synced</span>

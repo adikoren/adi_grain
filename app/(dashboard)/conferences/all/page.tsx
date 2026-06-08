@@ -9,7 +9,8 @@ export default async function AllConferencesPage() {
 
   const [conferences, myAssignments, reps] = await Promise.all([
     db.conference.findMany({
-      orderBy: { icpScore: 'desc' },
+      where: { endDate: { gte: new Date() } },
+      orderBy: { startDate: 'asc' },
       include: {
         assignments: { include: { user: { select: { id: true, name: true } } } },
         _count: { select: { leads: true } },

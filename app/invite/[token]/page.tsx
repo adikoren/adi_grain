@@ -17,7 +17,7 @@ export default function InvitePage({ params }: { params: { token: string } }) {
     fetch(`/api/invitations/validate?token=${params.token}`)
       .then(r => r.json())
       .then(d => {
-        if (d.valid) { setInvitation(d.invitation); setStatus('valid') }
+        if (d.valid) { setInvitation(d.invitation); setName(d.invitation.name || ''); setStatus('valid') }
         else setStatus('invalid')
       })
       .catch(() => setStatus('invalid'))

@@ -44,7 +44,6 @@ const ATTENDING_CLS: Record<string, string> = {
   ATTENDED:      'bg-slate-100 text-slate-500',
 }
 
-function isPast(c: Conference) { return new Date(c.endDate) < new Date() }
 
 export default function ConferencesClient({
   conferences, isManager, myConferenceIds = [], reps = [],
@@ -52,7 +51,6 @@ export default function ConferencesClient({
   conferences: Conference[]; isManager: boolean; myConferenceIds?: string[]; reps?: Rep[]
 }) {
   const mySet = new Set(myConferenceIds)
-  const [tab, setTab]                 = useState<'upcoming' | 'past'>('upcoming')
   const [search, setSearch]           = useState('')
   const [region, setRegion]           = useState('')
   const [vertical, setVertical]       = useState('')
@@ -61,11 +59,7 @@ export default function ConferencesClient({
   const [repId, setRepId]             = useState('')
   const [attending, setAttending]     = useState('')
 
-  const upcoming = conferences.filter(c => !isPast(c))
-  const past     = conferences.filter(c => isPast(c))
-  const pool     = tab === 'upcoming' ? upcoming : past
-
-  const filtered = useMemo(() => pool.filter(c => {
+  const filtered = useMemo(() => conferences.filter(c => {
     const verts: string[]   = JSON.parse(c.verticals || '[]')
     const personas: string[] = JSON.parse(c.buyerPersonas || '[]')
     const t = tier(c.icpScore)
@@ -78,10 +72,11 @@ export default function ConferencesClient({
     if (repId     && !c.assignments.some(a => a.user.id === repId)) return false
     if (attending && c.attendingStatus !== attending) return false
     return true
-  }), [pool, search, region, vertical, persona, tierFilter, repId, attending])
+  }), [conferences, search, region, vertical, persona, tierFilter, repId, attending])
 
   const activeCount = [search, region, vertical, persona, tierFilter, repId, attending].filter(Boolean).length
   function clear() { setSearch(''); setRegion(''); setVertical(''); setPersona(''); setTierFilter(''); setRepId(''); setAttending('') }
+
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -89,21 +84,15 @@ export default function ConferencesClient({
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold text-content-primary">Conferences</h1>
-          <p className="text-content-muted text-sm mt-1">{filtered.length} shown · {upcoming.length} upcoming · {past.length} past</p>
+          <p className="text-content-muted text-sm mt-1">{filtered.length} of {conferences.length} upcoming · sorted by date</p>
         </div>
-        {isManager && (
-          <Link href="/manager/conferences/new" className="btn-primary">+ Add Conference</Link>
-        )}
-      </div>
-
-      {/* Past / Upcoming tabs */}
-      <div className="flex gap-0.5 border-b border-surface-border mb-5">
-        {([['upcoming', `Upcoming (${upcoming.length})`], ['past', `Past (${past.length})`]] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === key ? 'border-brand-navy text-brand-navy' : 'border-transparent text-content-muted hover:text-content-primary'}`}>
-            {label}
-          </button>
-        ))}
+        <div className="flex items-center gap-2">
+          <Link href="/conferences/archive" className="btn-secondary text-sm">Archive</Link>
+          <Link href="/conferences" className="btn-secondary text-sm">Calendar</Link>
+          {isManager && (
+            <Link href="/manager/conferences/new" className="btn-primary">+ Add Conference</Link>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -143,17 +132,15 @@ export default function ConferencesClient({
               <option value="C">C — Moderate</option>
             </select>
           </div>
-          {tab === 'upcoming' && (
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold text-content-muted uppercase tracking-wide">Status</span>
-              <select className="input w-36" value={attending} onChange={e => setAttending(e.target.value)}>
-                <option value="">All statuses</option>
-                <option value="ATTENDING">Attending</option>
-                <option value="EVALUATING">Evaluating</option>
-                <option value="NOT_ATTENDING">Not attending</option>
-              </select>
-            </div>
-          )}
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold text-content-muted uppercase tracking-wide">Status</span>
+            <select className="input w-36" value={attending} onChange={e => setAttending(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="ATTENDING">Attending</option>
+              <option value="EVALUATING">Evaluating</option>
+              <option value="NOT_ATTENDING">Not attending</option>
+            </select>
+          </div>
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-semibold text-content-muted uppercase tracking-wide">Rep</span>
             <select className="input w-44" value={repId} onChange={e => setRepId(e.target.value)}>
@@ -174,13 +161,12 @@ export default function ConferencesClient({
           const personas: string[] = JSON.parse(c.buyerPersonas || '[]')
           const isMine = mySet.has(c.id)
           const t      = tier(c.icpScore)
-          const past   = isPast(c)
           const daysAway = Math.ceil((new Date(c.startDate).getTime() - Date.now()) / 86400000)
           const unassigned = c.assignments.length === 0
 
           return (
             <Link key={c.id} href={`/conferences/${c.id}`}
-              className={`card flex flex-col gap-3 hover:shadow-md hover:border-brand-accent/40 transition-all cursor-pointer group no-underline ${isMine ? 'border-l-[3px] border-l-brand-navy' : ''} ${past ? 'opacity-80' : ''}`}>
+              className={`card flex flex-col gap-3 hover:shadow-md hover:border-brand-accent/40 transition-all cursor-pointer group no-underline ${isMine ? 'border-l-[3px] border-l-brand-navy' : ''}`}>
 
               {/* Name + tier */}
               <div className="flex items-start justify-between gap-2">
@@ -194,7 +180,7 @@ export default function ConferencesClient({
               <p className="text-xs text-content-muted -mt-1">
                 {c.city}, {c.country} · {countryToRegion(c.country)} ·{' '}
                 {new Date(c.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}–{new Date(c.endDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}
-                {!past && daysAway > 0 && <span className="ml-1 text-content-muted/60">({daysAway}d)</span>}
+                {daysAway > 0 && <span className="ml-1 text-content-muted/60">({daysAway}d)</span>}
               </p>
 
               {/* Verticals */}
@@ -221,21 +207,17 @@ export default function ConferencesClient({
                       {(a.user.name[0] || '?').toUpperCase()}
                     </div>
                   ))}
-                  {unassigned && !past && (
+                  {unassigned && (
                     <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
                       <span>⚠</span> No rep
                     </span>
                   )}
-                  {unassigned && past && <span className="text-xs text-content-muted">—</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   {c._count.leads > 0 && <span className="text-xs text-content-muted">{c._count.leads} leads</span>}
-                  {!past && (
-                    <span className={`badge text-xs ${ATTENDING_CLS[c.attendingStatus] ?? 'bg-slate-100 text-slate-500'}`}>
-                      {c.attendingStatus === 'ATTENDING' ? '✓ Going' : c.attendingStatus === 'EVALUATING' ? 'Evaluating' : 'Not going'}
-                    </span>
-                  )}
-                  {past && <span className="badge text-xs bg-slate-100 text-slate-500">Past</span>}
+                  <span className={`badge text-xs ${ATTENDING_CLS[c.attendingStatus] ?? 'bg-slate-100 text-slate-500'}`}>
+                    {c.attendingStatus === 'ATTENDING' ? '✓ Going' : c.attendingStatus === 'EVALUATING' ? 'Evaluating' : 'Not going'}
+                  </span>
                   {isManager && (
                     <Link href={`/manager/conferences/${c.id}/edit`} onClick={e => e.stopPropagation()}
                       className="text-xs text-content-muted hover:text-brand-navy px-1.5 py-0.5 rounded hover:bg-surface-raised transition-colors">
@@ -251,8 +233,8 @@ export default function ConferencesClient({
 
       {filtered.length === 0 && (
         <div className="text-center py-16 text-content-muted">
-          <p className="text-3xl mb-3">{tab === 'past' ? '📁' : '📅'}</p>
-          <p>{tab === 'past' ? 'No past conferences found.' : 'No upcoming conferences match your filters.'}</p>
+          <p className="text-3xl mb-3">📅</p>
+          <p>No upcoming conferences match your filters.</p>
           {activeCount > 0 && <button onClick={clear} className="mt-2 text-sm text-brand-accent hover:underline">Clear all filters</button>}
         </div>
       )}

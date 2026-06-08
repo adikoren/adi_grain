@@ -19,6 +19,7 @@ export default async function PlanningPage() {
       select: { id: true, name: true, email: true, role: true },
     }),
     db.conferenceAssignment.findMany({
+      where: { conference: { endDate: { gte: now } } },
       include: { user: { select: { id: true, name: true } } },
     }),
   ])

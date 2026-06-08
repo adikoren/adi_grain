@@ -21,8 +21,7 @@ export default function PlanningClient({ conferences, users, assignments, isMana
     return map
   })
 
-  const now = new Date()
-  const upcoming = conferences.filter(c => new Date(c.endDate) >= now)
+  const upcoming = conferences // server already filters endDate >= now
   const tierA    = upcoming.filter(c => tier(c.icpScore) === 'A')
   const unassigned = upcoming.filter(c => !(localAssignments[c.id]?.length > 0))
   const unassignedTierA = tierA.filter(c => !(localAssignments[c.id]?.length > 0))

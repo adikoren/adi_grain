@@ -21,7 +21,7 @@ export async function GET() {
   })
 
   const conferences = await db.conference.findMany({
-    where: { status: 'ELIGIBLE' },
+    where: { endDate: { gte: new Date() } },
     select: { id: true, name: true, city: true, country: true, startDate: true, endDate: true },
   })
 
@@ -56,13 +56,18 @@ export async function POST(req: NextRequest) {
         update: {},
         create: { conferenceId: confId, userId, assignedById: session.user.id },
       })
+      // Auto-flip to ATTENDING when a rep is assigned
+      await db.conference.update({
+        where: { id: confId },
+        data: { attendingStatus: 'ATTENDING' },
+      })
     }
     return NextResponse.json({ ok: true })
   }
 
   if (action === 'recalculate') {
     const conferences = await db.conference.findMany({
-      where: { status: 'ELIGIBLE', lat: { not: null }, lng: { not: null } },
+      where: { endDate: { gte: new Date() }, lat: { not: null }, lng: { not: null } },
       orderBy: { startDate: 'asc' },
     })
 
