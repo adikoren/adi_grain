@@ -7,9 +7,13 @@ export default function LeadDetailClient({ lead, isManager }: { lead: any; isMan
   const router = useRouter()
   const [followUp, setFollowUp] = useState(lead.followUpDraft || '')
   const [arc, setArc] = useState('')
+  const [aiSummary, setAiSummary] = useState(lead.aiSummary || '')
   const [loadingFollowUp, setLoadingFollowUp] = useState(false)
   const [loadingArc, setLoadingArc] = useState(false)
+  const [loadingSummary, setLoadingSummary] = useState(false)
   const badge = scoreIcpBadge(lead.icpScore || 0)
+
+  const hasCurrentCompany = lead.currentCompany && lead.currentCompany !== lead.company
 
   async function draftFollowUp() {
     setLoadingFollowUp(true)
@@ -35,6 +39,47 @@ export default function LeadDetailClient({ lead, isManager }: { lead: any; isMan
     setLoadingArc(false)
   }
 
+  async function generateSummary() {
+    setLoadingSummary(true)
+    const res = await fetch(`/api/leads/${lead.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'relationship-arc' }),
+    })
+    const data = await res.json()
+    const summary = data.summary || ''
+    setAiSummary(summary)
+    // Save to DB
+    if (summary) {
+      await fetch(`/api/leads/${lead.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save-summary', summary }),
+      })
+    }
+    setLoadingSummary(false)
+  }
+
+  async function regenerateSummary() {
+    setLoadingSummary(true)
+    const res = await fetch(`/api/leads/${lead.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'relationship-arc' }),
+    })
+    const data = await res.json()
+    const summary = data.summary || ''
+    setAiSummary(summary)
+    if (summary) {
+      await fetch(`/api/leads/${lead.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save-summary', summary }),
+      })
+    }
+    setLoadingSummary(false)
+  }
+
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       {/* Header */}
@@ -47,6 +92,14 @@ export default function LeadDetailClient({ lead, isManager }: { lead: any; isMan
         <span className={`badge ${badge.className}`}>{badge.label}</span>
       </div>
 
+      {/* Current company banner */}
+      {hasCurrentCompany && (
+        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800 flex items-center gap-2">
+          <span>⚡</span>
+          <span>Now at <strong>{lead.currentCompany}</strong> (was at {lead.company})</span>
+        </div>
+      )}
+
       {/* Contact info */}
       <div className="card grid grid-cols-2 gap-4">
         {lead.email && <div><p className="text-xs text-content-muted uppercase tracking-wide">Email</p><a href={`mailto:${lead.email}`} className="text-brand-accent text-sm hover:underline">{lead.email}</a></div>}
@@ -55,6 +108,12 @@ export default function LeadDetailClient({ lead, isManager }: { lead: any; isMan
         {lead.hubspotContactId && <div><p className="text-xs text-content-muted uppercase tracking-wide">HubSpot</p><p className="text-sm text-green-400">✓ {lead.hubspotContactId}</p></div>}
         <div><p className="text-xs text-content-muted uppercase tracking-wide">Captured by</p><p className="text-sm">{lead.capturedBy?.name || '—'}</p></div>
         <div><p className="text-xs text-content-muted uppercase tracking-wide">ICP Score</p><p className="text-sm">{lead.icpScore ?? '—'} / 100</p></div>
+        {hasCurrentCompany && (
+          <>
+            <div><p className="text-xs text-content-muted uppercase tracking-wide">Current Company</p><p className="text-sm font-medium text-content-primary">{lead.currentCompany}</p></div>
+            <div><p className="text-xs text-content-muted uppercase tracking-wide">First Seen At</p><p className="text-sm text-content-secondary">{lead.company}</p></div>
+          </>
+        )}
       </div>
 
       {/* Notes */}
@@ -64,6 +123,32 @@ export default function LeadDetailClient({ lead, isManager }: { lead: any; isMan
           <p className="text-sm text-content-secondary whitespace-pre-wrap">{lead.notes}</p>
         </div>
       )}
+
+      {/* AI Relationship Summary */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold">Relationship Summary</h2>
+          {aiSummary ? (
+            <button onClick={regenerateSummary} disabled={loadingSummary} className="btn-secondary text-xs">
+              {loadingSummary ? 'Generating…' : '↺ Regenerate'}
+            </button>
+          ) : (
+            <button onClick={generateSummary} disabled={loadingSummary} className="btn-secondary text-xs">
+              {loadingSummary ? 'Generating…' : '✨ Generate AI summary'}
+            </button>
+          )}
+        </div>
+        {aiSummary ? (
+          <>
+            <p className="text-sm text-content-secondary whitespace-pre-wrap">{aiSummary}</p>
+            {lead.aiSummaryAt && (
+              <p className="text-xs text-content-muted mt-2">Last updated {new Date(lead.aiSummaryAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+            )}
+          </>
+        ) : (
+          <p className="text-content-muted text-sm">Generate a cached AI summary of this relationship</p>
+        )}
+      </div>
 
       {/* Conference history */}
       <div className="card">
@@ -77,6 +162,9 @@ export default function LeadDetailClient({ lead, isManager }: { lead: any; isMan
                 <p className="text-xs text-content-muted">{new Date(cl.conference.startDate).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</p>
               </div>
               <p className="text-xs text-content-muted">{cl.conference.city}, {cl.conference.country}</p>
+              {cl.companyAtTime && cl.companyAtTime !== lead.company && (
+                <p className="text-xs text-blue-600 mt-0.5">was at {cl.companyAtTime}</p>
+              )}
               {cl.engagementNotes && <p className="text-xs text-content-secondary mt-1">{cl.engagementNotes}</p>}
             </div>
           ))}

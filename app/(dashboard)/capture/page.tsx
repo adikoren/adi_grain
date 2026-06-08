@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Fuse from 'fuse.js'
 import { leadTemperature } from '@/lib/icp-score'
 
@@ -16,6 +16,12 @@ const WARMTH_CLS: Record<string, string> = {
   Warm:      'bg-amber-100 text-amber-700',
   Cold:      'bg-slate-100 text-slate-500',
 }
+
+const JOB_TITLE_CHIPS = [
+  'CFO', 'VP Finance', 'Head of Payments', 'Head of Treasury',
+  'Head of Partnerships', 'COO', 'Product Lead', 'Payments Manager',
+  'Treasury Manager', 'BD Manager', 'Founder / CEO',
+]
 
 function RelationshipContext({ match }: { match: LeadMatch }) {
   const tags: string[] = (() => { try { return JSON.parse(match.tags || '[]') } catch { return [] } })()
@@ -78,8 +84,14 @@ function RelationshipContext({ match }: { match: LeadMatch }) {
 
 export default function CapturePage() {
   const router = useRouter()
+  const params = useSearchParams()
   const [step, setStep] = useState<'form' | 'saving'>('form')
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', company: '', jobTitle: '', linkedinUrl: '', notes: '' })
+  const [form, setForm] = useState({
+    firstName: '', lastName: '', email: '', phone: '',
+    company: params.get('company') || '',
+    jobTitle: params.get('jobTitle') || '',
+    linkedinUrl: '', notes: '',
+  })
   const [ocrRunning, setOcrRunning] = useState(false)
   const [rawText, setRawText] = useState('')
   const [relationshipMatch, setRelationshipMatch] = useState<LeadMatch | null>(null)
@@ -90,14 +102,59 @@ export default function CapturePage() {
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Company combobox state
+  const [companySuggestions, setCompanySuggestions] = useState<string[]>([])
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false)
+  const companyRef = useRef<HTMLDivElement>(null)
+
+  // AI suggestion state
+  const [aiSuggestion, setAiSuggestion] = useState<{ context: string; icpRelevance: string; followUpAngle: string } | null>(null)
+  const [loadingAiSuggestion, setLoadingAiSuggestion] = useState(false)
+  const [aiDismissed, setAiDismissed] = useState(false)
+
+  const confIdFromUrl = params.get('conferenceId')
+
   useEffect(() => {
     fetch('/api/leads?all=1').then(r => r.json()).then(d => setAllLeads(d.leads || []))
-    fetch('/api/users/current-conference').then(r => r.json()).then(d => setCurrentConf(d.conference))
+    if (confIdFromUrl) {
+      setCurrentConf({ id: confIdFromUrl, name: params.get('conferenceName') || '' })
+    } else {
+      fetch('/api/users/current-conference').then(r => r.json()).then(d => setCurrentConf(d.conference))
+    }
   }, [])
+
+  // Click-outside to close company dropdown
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (companyRef.current && !companyRef.current.contains(e.target as Node)) {
+        setShowCompanyDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [])
+
+  async function fetchCompanySuggestions(q: string) {
+    const url = `/api/leads/companies?q=${encodeURIComponent(q)}${currentConf?.id ? `&conferenceId=${currentConf.id}` : ''}`
+    try {
+      const res = await fetch(url)
+      const data = await res.json()
+      setCompanySuggestions(data.companies || [])
+      setShowCompanyDropdown(true)
+    } catch {
+      setCompanySuggestions([])
+    }
+  }
 
   function updateForm(k: keyof typeof form, v: string) {
     const next = { ...form, [k]: v }
     setForm(next)
+
+    // Clear AI suggestion when company changes
+    if (k === 'company') {
+      setAiSuggestion(null)
+      setAiDismissed(false)
+    }
 
     if (allLeads.length === 0) return
 
@@ -114,10 +171,10 @@ export default function CapturePage() {
 
     // Fuzzy name + company match
     if (next.firstName && next.lastName) {
-      const fuse = new Fuse(allLeads, { keys: ['firstName', 'lastName', 'company'], threshold: 0.3 })
+      const fuse = new Fuse(allLeads, { keys: ['firstName', 'lastName', 'company'], threshold: 0.4 })
       const res = fuse.search(`${next.firstName} ${next.lastName} ${next.company}`).slice(0, 3)
       const top = res[0]
-      if (top && (top.score || 1) < 0.4 && top.item.conferences.length > 0) {
+      if (top && (top.score || 1) < 0.5 && top.item.conferences.length > 0) {
         setRelationshipMatch(top.item)
         setMergeLeadId(top.item.id)
         setOtherMatches(res.slice(1).map(r => r.item))
@@ -170,6 +227,36 @@ export default function CapturePage() {
     }
     setForm(next)
     if (next.email) updateForm('email', next.email)
+  }
+
+  async function handleGetAiSuggestion() {
+    if (!form.company || !form.jobTitle) return
+    setLoadingAiSuggestion(true)
+    setAiSuggestion(null)
+    try {
+      const res = await fetch('/api/leads/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company: form.company,
+          jobTitle: form.jobTitle,
+          conferenceId: currentConf?.id,
+          conferenceName: currentConf?.name,
+        }),
+      })
+      const data = await res.json()
+      if (data.suggestions) {
+        setAiSuggestion(data.suggestions)
+        setAiDismissed(false)
+      } else if (data.reason === 'no_key') {
+        setAiSuggestion({ context: 'AI key not configured', icpRelevance: '', followUpAngle: '' })
+        setAiDismissed(false)
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingAiSuggestion(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -238,21 +325,24 @@ export default function CapturePage() {
         </div>
       )}
 
-      {/* Light duplicate hints (no relationship history) */}
+      {/* Inline name suggestions — shown when typing name with no full relationship context */}
       {!relationshipMatch && otherMatches.length > 0 && (
-        <div className="card border-amber-200 bg-amber-50/50 mb-4">
-          <p className="text-xs font-semibold text-amber-700 mb-2">Possible matches</p>
-          {otherMatches.map(m => (
-            <div key={m.id} className="flex items-center justify-between py-2 border-t border-amber-100 first:border-0">
-              <div>
-                <p className="text-sm font-medium text-content-primary">{m.firstName} {m.lastName}</p>
-                <p className="text-xs text-content-muted">{m.company} · {m.jobTitle || '—'}</p>
+        <div className="mb-4 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted px-3 pt-2.5 pb-1">Similar contacts</p>
+          {otherMatches.map((m, i) => (
+            <button key={m.id} onClick={() => setMergeLeadId(mergeLeadId === m.id ? null : m.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-t border-surface-border first:border-0 hover:bg-surface-raised/80 ${mergeLeadId === m.id ? 'bg-brand-navy/5 border-l-2 border-l-brand-navy' : ''}`}>
+              <div className="w-8 h-8 rounded-full bg-brand-navy/10 flex items-center justify-center text-xs font-bold text-brand-navy flex-shrink-0">
+                {m.firstName[0]}{m.lastName[0]}
               </div>
-              <button onClick={() => setMergeLeadId(mergeLeadId === m.id ? null : m.id)}
-                className={`text-xs px-2 py-1 rounded transition-colors ${mergeLeadId === m.id ? 'bg-brand-navy text-white font-medium' : 'bg-surface-raised text-content-secondary hover:text-content-primary'}`}>
-                {mergeLeadId === m.id ? '✓ Link' : 'Link'}
-              </button>
-            </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-content-primary">{m.firstName} {m.lastName}</p>
+                <p className="text-xs text-content-muted truncate">{m.company}{m.jobTitle ? ` · ${m.jobTitle}` : ''}</p>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-lg font-medium flex-shrink-0 transition-colors ${mergeLeadId === m.id ? 'bg-brand-navy text-white' : 'bg-surface-muted text-content-muted'}`}>
+                {mergeLeadId === m.id ? '✓ Same person' : 'Same person?'}
+              </span>
+            </button>
           ))}
         </div>
       )}
@@ -261,15 +351,132 @@ export default function CapturePage() {
 
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <div><label className="label">First name *</label><input className="input" value={form.firstName} onChange={e => updateForm('firstName', e.target.value)} /></div>
-          <div><label className="label">Last name *</label><input className="input" value={form.lastName} onChange={e => updateForm('lastName', e.target.value)} /></div>
+          <div><label htmlFor="cap-firstName" className="label">First name *</label><input id="cap-firstName" className="input" value={form.firstName} onChange={e => updateForm('firstName', e.target.value)} /></div>
+          <div><label htmlFor="cap-lastName" className="label">Last name *</label><input id="cap-lastName" className="input" value={form.lastName} onChange={e => updateForm('lastName', e.target.value)} /></div>
         </div>
-        <div><label className="label">Company *</label><input className="input" value={form.company} onChange={e => updateForm('company', e.target.value)} /></div>
-        <div><label className="label">Job title</label><input className="input" value={form.jobTitle} onChange={e => updateForm('jobTitle', e.target.value)} /></div>
-        <div><label className="label">Email</label><input className="input" type="email" value={form.email} onChange={e => updateForm('email', e.target.value)} /></div>
-        <div><label className="label">Phone</label><input className="input" type="tel" value={form.phone} onChange={e => updateForm('phone', e.target.value)} /></div>
-        <div><label className="label">LinkedIn URL</label><input className="input" value={form.linkedinUrl} onChange={e => updateForm('linkedinUrl', e.target.value)} /></div>
-        <div><label className="label">Notes</label><textarea className="input resize-none" rows={3} value={form.notes} onChange={e => updateForm('notes', e.target.value)} placeholder="What did you talk about?" /></div>
+
+        {/* Company combobox */}
+        <div>
+          <label htmlFor="cap-company" className="label">Company *</label>
+          <div ref={companyRef} className="relative">
+            <input
+              id="cap-company"
+              className="input w-full"
+              value={form.company}
+              autoComplete="off"
+              onChange={e => {
+                updateForm('company', e.target.value)
+                fetchCompanySuggestions(e.target.value)
+              }}
+              onFocus={() => fetchCompanySuggestions(form.company)}
+            />
+            {showCompanyDropdown && companySuggestions.length > 0 && (
+              <ul className="absolute z-10 mt-1 w-full bg-white border border-surface-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {companySuggestions.map((c, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-surface-raised transition-colors"
+                      onMouseDown={e => {
+                        e.preventDefault()
+                        updateForm('company', c)
+                        setShowCompanyDropdown(false)
+                        setAiSuggestion(null)
+                        setAiDismissed(false)
+                      }}
+                    >
+                      {c}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Job title chips */}
+        <div>
+          <label htmlFor="cap-jobTitle" className="label">Job title</label>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {JOB_TITLE_CHIPS.map(chip => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => updateForm('jobTitle', chip)}
+                className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                  form.jobTitle === chip
+                    ? 'bg-brand-navy text-white border-brand-navy'
+                    : 'bg-white text-content-secondary border-surface-border hover:border-brand-navy/40 hover:text-brand-navy'
+                }`}
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+          <input id="cap-jobTitle" className="input" value={form.jobTitle} onChange={e => updateForm('jobTitle', e.target.value)} />
+        </div>
+
+        {/* AI suggestion panel — shown after company + jobTitle filled */}
+        {form.company && form.jobTitle && !aiDismissed && (
+          <div>
+            {!aiSuggestion && (
+              <button
+                type="button"
+                onClick={handleGetAiSuggestion}
+                disabled={loadingAiSuggestion}
+                className="text-xs text-brand-accent hover:text-brand-navy flex items-center gap-1.5 transition-colors"
+                data-testid="ai-suggest-btn"
+              >
+                {loadingAiSuggestion ? (
+                  <><div className="w-3.5 h-3.5 border border-brand-accent border-t-transparent rounded-full animate-spin" /> Getting AI context…</>
+                ) : (
+                  <>✨ Get AI context</>
+                )}
+              </button>
+            )}
+            {aiSuggestion && (
+              <div className="rounded-xl border border-brand-accent/30 bg-brand-accent/5 p-3 space-y-2 relative" data-testid="ai-suggestion-panel">
+                <button
+                  type="button"
+                  onClick={() => { setAiDismissed(true); setAiSuggestion(null) }}
+                  className="absolute top-2 right-2 text-content-muted hover:text-content-primary text-base leading-none"
+                  aria-label="Dismiss AI panel"
+                >
+                  ×
+                </button>
+                {aiSuggestion.context === 'AI key not configured' ? (
+                  <p className="text-xs text-amber-600">AI key not configured</p>
+                ) : (
+                  <>
+                    {aiSuggestion.context && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Company context</p>
+                        <p className="text-xs text-content-secondary">{aiSuggestion.context}</p>
+                      </div>
+                    )}
+                    {aiSuggestion.icpRelevance && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Why they matter</p>
+                        <p className="text-xs text-content-secondary">{aiSuggestion.icpRelevance}</p>
+                      </div>
+                    )}
+                    {aiSuggestion.followUpAngle && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Follow-up angle</p>
+                        <p className="text-xs text-content-secondary">{aiSuggestion.followUpAngle}</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div><label htmlFor="cap-email" className="label">Email</label><input id="cap-email" className="input" type="email" value={form.email} onChange={e => updateForm('email', e.target.value)} /></div>
+        <div><label htmlFor="cap-phone" className="label">Phone</label><input id="cap-phone" className="input" type="tel" value={form.phone} onChange={e => updateForm('phone', e.target.value)} /></div>
+        <div><label htmlFor="cap-linkedin" className="label">LinkedIn URL</label><input id="cap-linkedin" className="input" value={form.linkedinUrl} onChange={e => updateForm('linkedinUrl', e.target.value)} /></div>
+        <div><label htmlFor="cap-notes" className="label">Notes</label><textarea id="cap-notes" className="input resize-none" rows={3} value={form.notes} onChange={e => updateForm('notes', e.target.value)} placeholder="What did you talk about?" /></div>
         <button type="submit" className="btn-primary w-full flex justify-center text-base py-3">Save Lead</button>
       </form>
     </div>

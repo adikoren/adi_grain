@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     if (conferenceId) {
       await db.conferenceLead.create({
-        data: { conferenceId, leadId: lead.id, engagementNotes: notes },
+        data: { conferenceId, leadId: lead.id, engagementNotes: notes, companyAtTime: company || undefined, jobTitleAtTime: jobTitle || undefined },
       }).catch(() => {})
     }
 

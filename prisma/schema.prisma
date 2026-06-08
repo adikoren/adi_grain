@@ -119,15 +119,28 @@ model Conference {
 }
 
 model TargetAccount {
-  id           String   @id @default(cuid())
-  conferenceId String
-  company      String
-  contactName  String?
-  contactRole  String?
-  notes        String?
-  priority     String   @default("MEDIUM")
-  status       String   @default("TO_MEET")
-  createdAt    DateTime @default(now())
+  id              String    @id @default(cuid())
+  conferenceId    String
+  company         String
+  contactName     String?
+  contactRole     String?
+  notes           String?
+  priority        String    @default("MEDIUM")
+  status          String    @default("TO_MEET")
+  createdAt       DateTime  @default(now())
+
+  website         String?
+  description     String?
+  industry        String?
+  icpFit          String?
+  fxRelevance     String?
+  relevanceReason String?
+  companySize     String?
+  isPublic        Boolean   @default(false)
+  regions         String?
+  confidence      String?   @default("MEDIUM")
+  dataSource      String?
+  lastEnrichedAt  DateTime?
 
   conference Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
 }
@@ -139,6 +152,7 @@ model ConferenceAssignment {
   role         String   @default("PRIMARY")
   assignedById String?
   assignedAt   DateTime @default(now())
+  myFocus      String?
 
   conference Conference @relation(fields: [conferenceId], references: [id])
   user       User       @relation(fields: [userId], references: [id])
@@ -158,24 +172,28 @@ model TripOpportunity {
 }
 
 model Lead {
-  id               String   @id @default(cuid())
-  firstName        String
-  lastName         String
-  email            String?
-  phone            String?
-  company          String
-  jobTitle         String?
-  linkedinUrl      String?
-  notes            String?
-  cardImageUrl     String?
-  rawCardText      String?
-  icpScore         Float?
-  tags             String   @default("[]")
-  followUpDraft    String?
-  hubspotContactId String?
-  capturedById     String
-  capturedAt       DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  firstName          String
+  lastName           String
+  email              String?
+  phone              String?
+  company            String
+  jobTitle           String?
+  linkedinUrl        String?
+  notes              String?
+  cardImageUrl       String?
+  rawCardText        String?
+  icpScore           Float?
+  tags               String    @default("[]")
+  followUpDraft      String?
+  hubspotContactId   String?
+  capturedById       String
+  capturedAt         DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  currentCompany     String?
+  aiSummary          String?
+  aiSummaryAt        DateTime?
+  relationshipStatus String?
 
   capturedBy  User             @relation(fields: [capturedById], references: [id])
   conferences ConferenceLead[]
@@ -190,6 +208,8 @@ model ConferenceLead {
   leadId          String
   engagementNotes String?
   capturedAt      DateTime @default(now())
+  companyAtTime   String?
+  jobTitleAtTime  String?
 
   conference Conference @relation(fields: [conferenceId], references: [id])
   lead       Lead       @relation(fields: [leadId], references: [id])

@@ -30,7 +30,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { action } = await req.json()
+  const body = await req.json()
+  const { action } = body
+
+  if (action === 'save-summary') {
+    const { summary } = body
+    await db.lead.update({
+      where: { id: params.id },
+      data: { aiSummary: summary, aiSummaryAt: new Date() },
+    })
+    return NextResponse.json({ ok: true })
+  }
 
   const lead = await db.lead.findUnique({
     where: { id: params.id },
@@ -63,6 +73,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       notes: cl.engagementNotes,
     }))
     const summary = await summariseRelationshipArc(appearances)
+    // Auto-save summary to lead
+    await db.lead.update({ where: { id: params.id }, data: { aiSummary: summary, aiSummaryAt: new Date() } })
     return NextResponse.json({ summary })
   }
 

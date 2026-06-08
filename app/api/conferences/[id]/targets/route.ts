@@ -21,10 +21,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { targetId, status } = await req.json()
+  const { targetId, status, website, description, industry, icpFit, fxRelevance, relevanceReason, companySize, isPublic, regions, confidence, dataSource } = await req.json()
+
+  const data: Record<string, any> = {}
+  if (status !== undefined) data.status = status
+  if (website !== undefined) data.website = website
+  if (description !== undefined) data.description = description
+  if (industry !== undefined) data.industry = industry
+  if (icpFit !== undefined) data.icpFit = icpFit
+  if (fxRelevance !== undefined) data.fxRelevance = fxRelevance
+  if (relevanceReason !== undefined) data.relevanceReason = relevanceReason
+  if (companySize !== undefined) data.companySize = companySize
+  if (isPublic !== undefined) data.isPublic = isPublic
+  if (regions !== undefined) data.regions = regions
+  if (confidence !== undefined) data.confidence = confidence
+  if (dataSource !== undefined) data.dataSource = dataSource
+
   const target = await db.targetAccount.update({
     where: { id: targetId },
-    data: { status },
+    data,
   })
   return NextResponse.json({ target })
 }

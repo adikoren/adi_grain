@@ -12,11 +12,18 @@ interface Lead {
   hubspotContactId: string | null
   capturedBy: { id: string; name: string }
 }
-interface Assignment { user: { id: string; name: string; role: string }; role: string }
+interface Assignment { id: string; userId: string; myFocus: string | null; user: { id: string; name: string; role: string }; role?: string }
 interface TargetAccount {
   id: string; company: string; contactName: string | null
   contactRole: string | null; notes: string | null
   priority: string; status: string; createdAt: Date
+  website: string | null
+  description: string | null
+  industry: string | null
+  icpFit: string | null
+  fxRelevance: string | null
+  relevanceReason: string | null
+  confidence: string | null
 }
 interface Conference {
   id: string; name: string; website: string | null
@@ -39,10 +46,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   LOW:    'bg-slate-100 text-slate-600',
 }
 const TARGET_STATUS: Record<string, string> = {
-  TO_MEET:      'bg-blue-100 text-blue-700',
-  REACHED_OUT:  'bg-purple-100 text-purple-700',
-  MET:          'bg-emerald-100 text-emerald-700',
-  PASSED:       'bg-slate-100 text-slate-500',
+  TO_MEET:          'bg-blue-100 text-blue-700',
+  REACHED_OUT:      'bg-purple-100 text-purple-700',
+  MEETING_PLANNED:  'bg-orange-100 text-orange-700',
+  MET:              'bg-emerald-100 text-emerald-700',
+  FOLLOW_UP_NEEDED: 'bg-yellow-100 text-yellow-700',
+  NOT_RELEVANT:     'bg-slate-100 text-slate-400',
+  PASSED:           'bg-slate-100 text-slate-500',
 }
 const ATTENDING_COLORS: Record<string, string> = {
   ATTENDING:     'bg-emerald-100 text-emerald-700',
@@ -242,7 +252,7 @@ export default function ConferenceDetailClient({
                     </div>
                     <div>
                       <p className="text-sm font-medium text-content-primary">{a.user.name}</p>
-                      <p className="text-xs text-content-muted capitalize">{a.role.toLowerCase()}</p>
+                      <p className="text-xs text-content-muted capitalize">{a.user.role?.toLowerCase()}</p>
                     </div>
                   </div>
                 ))
@@ -293,32 +303,26 @@ export default function ConferenceDetailClient({
         <div className="grid lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-5">
             <TargetAccountsPanel conferenceId={conference.id} targets={conference.targetAccounts} isManager={isManager} onRefresh={() => router.refresh()} />
+            {!isManager && conference.targetAccounts.length > 0 && (
+              <SuggestedLeadsPanel
+                targets={conference.targetAccounts}
+                conferenceId={conference.id}
+                conferenceName={conference.name}
+              />
+            )}
           </div>
           <div className="space-y-4">
             {isManager && (
               <PlanStatusPanel conference={conference} onRefresh={() => router.refresh()} />
             )}
             {!isManager && (
-              <div className="card space-y-3">
-                <h3 className="font-semibold text-sm">Your Assignment</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-content-muted">Status</span>
-                    <span className={`badge ${ATTENDING_COLORS[conference.attendingStatus]}`}>{conference.attendingStatus.replace('_', ' ')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-content-muted">Meetings booked</span>
-                    <span className="font-medium">{conference.meetingsScheduled}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-content-muted">Targets</span>
-                    <span className="font-medium">{conference.targetAccounts.length}</span>
-                  </div>
-                </div>
-                <Link href="/capture" className="btn-primary w-full justify-center text-xs py-2 mt-2">
-                  + Add Lead
-                </Link>
-              </div>
+              <MyFocusPanel
+                conferenceId={conference.id}
+                assignment={conference.assignments.find(a => a.userId === currentUserId) || null}
+                attendingStatus={conference.attendingStatus}
+                meetingsScheduled={conference.meetingsScheduled}
+                targets={conference.targetAccounts}
+              />
             )}
           </div>
         </div>
@@ -337,6 +341,12 @@ export default function ConferenceDetailClient({
   )
 }
 
+const ICP_FIT_COLORS: Record<string, string> = {
+  HIGH:   'bg-emerald-100 text-emerald-700',
+  MEDIUM: 'bg-amber-100 text-amber-700',
+  LOW:    'bg-slate-100 text-slate-600',
+}
+
 // ── Target Accounts Panel ─────────────────────────────────────────────────────
 function TargetAccountsPanel({ conferenceId, targets, isManager, onRefresh }: {
   conferenceId: string; targets: TargetAccount[]; isManager: boolean; onRefresh: () => void
@@ -344,6 +354,13 @@ function TargetAccountsPanel({ conferenceId, targets, isManager, onRefresh }: {
   const [adding, setAdding] = useState(false)
   const [form, setForm]     = useState({ company: '', contactName: '', contactRole: '', notes: '', priority: 'MEDIUM' })
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<{
+    website: string; description: string; industry: string
+    icpFit: string; fxRelevance: string; relevanceReason: string
+    companySize: string; confidence: string
+  }>({ website: '', description: '', industry: '', icpFit: '', fxRelevance: '', relevanceReason: '', companySize: '', confidence: '' })
+  const [editSaving, setEditSaving] = useState(false)
 
   async function addTarget() {
     if (!form.company) return
@@ -366,6 +383,32 @@ function TargetAccountsPanel({ conferenceId, targets, isManager, onRefresh }: {
     await fetch(`/api/conferences/${conferenceId}/targets`, {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetId }),
     })
+    onRefresh()
+  }
+
+  function startEdit(t: TargetAccount) {
+    setEditingId(t.id)
+    setEditForm({
+      website: t.website || '',
+      description: t.description || '',
+      industry: t.industry || '',
+      icpFit: t.icpFit || '',
+      fxRelevance: t.fxRelevance || '',
+      relevanceReason: t.relevanceReason || '',
+      companySize: t.companySize || '',
+      confidence: t.confidence || '',
+    })
+  }
+
+  async function saveEnrichment(targetId: string) {
+    setEditSaving(true)
+    await fetch(`/api/conferences/${conferenceId}/targets`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetId, ...editForm }),
+    })
+    setEditSaving(false)
+    setEditingId(null)
     onRefresh()
   }
 
@@ -422,34 +465,116 @@ function TargetAccountsPanel({ conferenceId, targets, isManager, onRefresh }: {
       ) : (
         <div className="space-y-2">
           {targets.map(t => (
-            <div key={t.id} className="flex items-start gap-3 p-3 rounded-lg bg-surface-raised border border-surface-border group">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-medium text-sm text-content-primary">{t.company}</p>
-                  <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
+            <div key={t.id} className="rounded-lg bg-surface-raised border border-surface-border">
+              <div className="flex items-start gap-3 p-3 group">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-sm text-content-primary">{t.company}</p>
+                    <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
+                    {t.icpFit && <span className={`badge text-xs ${ICP_FIT_COLORS[t.icpFit] || 'bg-slate-100 text-slate-600'}`}>ICP Fit: {t.icpFit}</span>}
+                    {t.fxRelevance && <span className={`badge text-xs ${ICP_FIT_COLORS[t.fxRelevance] || 'bg-slate-100 text-slate-600'}`}>FX: {t.fxRelevance}</span>}
+                  </div>
+                  {(t.contactName || t.contactRole) && (
+                    <p className="text-xs text-content-muted mt-0.5">
+                      {t.contactName}{t.contactRole ? ` · ${t.contactRole}` : ''}
+                    </p>
+                  )}
+                  {t.description && <p className="text-xs text-content-muted mt-0.5 italic">{t.description}</p>}
+                  {t.notes && !t.description && <p className="text-xs text-content-muted mt-0.5 italic">{t.notes}</p>}
                 </div>
-                {(t.contactName || t.contactRole) && (
-                  <p className="text-xs text-content-muted mt-0.5">
-                    {t.contactName}{t.contactRole ? ` · ${t.contactRole}` : ''}
-                  </p>
-                )}
-                {t.notes && <p className="text-xs text-content-muted mt-0.5 italic">{t.notes}</p>}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <select
+                    value={t.status}
+                    onChange={e => updateStatus(t.id, e.target.value)}
+                    className="text-xs border border-surface-border rounded-md px-2 py-1 bg-white text-content-secondary focus:outline-none focus:ring-1 focus:ring-brand-accent"
+                  >
+                    <option value="TO_MEET">To Meet</option>
+                    <option value="REACHED_OUT">Reached Out</option>
+                    <option value="MEETING_PLANNED">Meeting Planned</option>
+                    <option value="MET">Met ✓</option>
+                    <option value="FOLLOW_UP_NEEDED">Follow-up Needed</option>
+                    <option value="NOT_RELEVANT">Not Relevant</option>
+                    <option value="PASSED">Passed</option>
+                  </select>
+                  {isManager && (
+                    <>
+                      <button
+                        onClick={() => editingId === t.id ? setEditingId(null) : startEdit(t)}
+                        className="text-xs text-brand-accent hover:text-brand-navy transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        Edit
+                      </button>
+                      <button onClick={() => deleteTarget(t.id)} className="opacity-0 group-hover:opacity-100 text-content-muted hover:text-red-500 transition-all text-base leading-none">×</button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <select
-                  value={t.status}
-                  onChange={e => updateStatus(t.id, e.target.value)}
-                  className="text-xs border border-surface-border rounded-md px-2 py-1 bg-white text-content-secondary focus:outline-none focus:ring-1 focus:ring-brand-accent"
-                >
-                  <option value="TO_MEET">To Meet</option>
-                  <option value="REACHED_OUT">Reached Out</option>
-                  <option value="MET">Met ✓</option>
-                  <option value="PASSED">Passed</option>
-                </select>
-                {isManager && (
-                  <button onClick={() => deleteTarget(t.id)} className="opacity-0 group-hover:opacity-100 text-content-muted hover:text-red-500 transition-all text-base leading-none">×</button>
-                )}
-              </div>
+
+              {/* Inline edit form for enrichment */}
+              {isManager && editingId === t.id && (
+                <div className="border-t border-surface-border p-3 bg-surface-raised/50 space-y-3">
+                  <p className="text-xs font-semibold text-content-muted uppercase tracking-wide">Enrichment Details</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label">Website</label>
+                      <input className="input text-xs" placeholder="https://..." value={editForm.website} onChange={e => setEditForm(p => ({...p, website: e.target.value}))} />
+                    </div>
+                    <div>
+                      <label className="label">Industry</label>
+                      <input className="input text-xs" placeholder="Fintech" value={editForm.industry} onChange={e => setEditForm(p => ({...p, industry: e.target.value}))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Description</label>
+                    <textarea className="input text-xs resize-none" rows={2} placeholder="Company description…" value={editForm.description} onChange={e => setEditForm(p => ({...p, description: e.target.value}))} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="label">ICP Fit</label>
+                      <select className="input text-xs" value={editForm.icpFit} onChange={e => setEditForm(p => ({...p, icpFit: e.target.value}))}>
+                        <option value="">—</option>
+                        <option value="HIGH">High</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="LOW">Low</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">FX Relevance</label>
+                      <select className="input text-xs" value={editForm.fxRelevance} onChange={e => setEditForm(p => ({...p, fxRelevance: e.target.value}))}>
+                        <option value="">—</option>
+                        <option value="HIGH">High</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="LOW">Low</option>
+                        <option value="NONE">None</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Confidence</label>
+                      <select className="input text-xs" value={editForm.confidence} onChange={e => setEditForm(p => ({...p, confidence: e.target.value}))}>
+                        <option value="">—</option>
+                        <option value="HIGH">High</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="LOW">Low</option>
+                        <option value="NEEDS_REVIEW">Needs Review</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="label">Company size</label>
+                      <input className="input text-xs" placeholder="e.g. 201-500" value={editForm.companySize} onChange={e => setEditForm(p => ({...p, companySize: e.target.value}))} />
+                    </div>
+                    <div>
+                      <label className="label">Relevance reason</label>
+                      <input className="input text-xs" placeholder="Why this company…" value={editForm.relevanceReason} onChange={e => setEditForm(p => ({...p, relevanceReason: e.target.value}))} />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => saveEnrichment(t.id)} disabled={editSaving} className="btn-primary text-xs py-1">{editSaving ? 'Saving…' : 'Save'}</button>
+                    <button onClick={() => setEditingId(null)} className="btn-secondary text-xs py-1">Cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -672,6 +797,201 @@ function HubSpotPanel({ leads, hubspotLogs, conferenceId }: {
       {hubspotLogs.length === 0 && (
         <div className="card text-center py-10 text-content-muted text-sm">No sync history for this conference yet.</div>
       )}
+    </div>
+  )
+}
+
+// ── My Focus Panel ────────────────────────────────────────────────────────────
+const STATUS_LABEL: Record<string, string> = {
+  TO_MEET: 'To meet', REACHED_OUT: 'Reached out', MEETING_PLANNED: 'Meeting planned',
+  MET: 'Met', FOLLOW_UP_NEEDED: 'Follow-up needed', NOT_RELEVANT: 'Not relevant', PASSED: 'Passed',
+}
+
+function MyFocusPanel({ conferenceId, assignment, attendingStatus, meetingsScheduled, targets }: {
+  conferenceId: string
+  assignment: Assignment | null
+  attendingStatus: string; meetingsScheduled: number
+  targets: TargetAccount[]
+}) {
+  const [focus, setFocus] = useState(assignment?.myFocus || '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  async function save() {
+    if (focus === (assignment?.myFocus || '')) return
+    setSaving(true)
+    await fetch(`/api/conferences/${conferenceId}/focus`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ myFocus: focus }),
+    })
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2000)
+  }
+
+  const sorted = [...targets].sort((a, b) => {
+    const order = { HIGH: 0, MEDIUM: 1, LOW: 2 }
+    return (order[a.priority as keyof typeof order] ?? 3) - (order[b.priority as keyof typeof order] ?? 3)
+  })
+
+  return (
+    <div className="space-y-4">
+      {/* Personal goal textarea */}
+      <div className="card space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm text-content-primary">My Goal</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-content-muted">{meetingsScheduled} meetings booked</span>
+            <span className={`badge text-xs ${ATTENDING_COLORS[attendingStatus] ?? 'bg-slate-100 text-slate-500'}`}>
+              {attendingStatus === 'ATTENDING' ? '✓ Going' : attendingStatus === 'EVALUATING' ? 'Evaluating' : 'Not going'}
+            </span>
+          </div>
+        </div>
+        <textarea
+          className="input resize-none w-full text-sm"
+          rows={3}
+          placeholder="What's your goal? Who do you want to meet? What deals are you trying to close?"
+          value={focus}
+          onChange={e => setFocus(e.target.value)}
+          onBlur={save}
+        />
+        <p className="text-xs text-content-muted text-right">
+          {saving ? 'Saving…' : saved ? '✓ Saved' : 'Auto-saves on blur'}
+        </p>
+      </div>
+
+      {/* Target companies */}
+      {sorted.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm text-content-primary">Focus Companies ({sorted.length})</h3>
+          {sorted.map(t => (
+            <div key={t.id} className="card space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-brand-navy/10 flex items-center justify-center text-xs font-bold text-brand-navy flex-shrink-0">
+                    {t.company[0]?.toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-content-primary">{t.company}</p>
+                    {t.description
+                      ? <p className="text-xs text-content-secondary mt-0.5 leading-relaxed">{t.description}</p>
+                      : t.notes && <p className="text-xs text-content-muted mt-0.5 leading-relaxed">{t.notes}</p>
+                    }
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                  <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
+                  <span className={`badge text-xs ${TARGET_STATUS[t.status] || 'bg-slate-100 text-slate-500'}`}>{STATUS_LABEL[t.status] || t.status}</span>
+                  {t.icpFit && <span className={`badge text-xs ${ICP_FIT_COLORS[t.icpFit] || 'bg-slate-100 text-slate-600'}`}>ICP: {t.icpFit}</span>}
+                  {t.fxRelevance && <span className={`badge text-xs ${ICP_FIT_COLORS[t.fxRelevance] || 'bg-slate-100 text-slate-600'}`}>FX: {t.fxRelevance}</span>}
+                </div>
+              </div>
+              {t.relevanceReason && (
+                <div className="rounded-lg bg-brand-navy/5 border border-brand-navy/10 px-3 py-2 text-xs text-content-secondary">
+                  <span className="font-semibold text-content-primary">Why this matters: </span>{t.relevanceReason}
+                </div>
+              )}
+              {t.contactName && (
+                <div className="flex items-center gap-2 bg-surface-raised rounded-lg px-3 py-2 text-xs border border-surface-border">
+                  <div className="w-5 h-5 rounded-full bg-brand-navy/10 flex items-center justify-center text-[10px] font-bold text-brand-navy">
+                    {t.contactName[0]?.toUpperCase()}
+                  </div>
+                  <span className="font-medium text-content-primary">{t.contactName}</span>
+                  {t.contactRole && <span className="text-content-muted">· {t.contactRole}</span>}
+                  <span className="ml-auto text-emerald-600 font-medium">Expected attendee</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sorted.length === 0 && (
+        <div className="card text-center py-8 text-content-muted text-sm">
+          No target companies set yet. Ask your manager to add them.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Suggested Leads Panel ─────────────────────────────────────────────────────
+const SUGGESTED_ROLES = [
+  'Head of Payments', 'CFO', 'VP Finance',
+  'Head of Treasury', 'Partnerships Manager', 'Product Lead',
+]
+
+function SuggestedLeadsPanel({ targets, conferenceId, conferenceName }: {
+  targets: TargetAccount[]; conferenceId: string; conferenceName: string
+}) {
+  const sorted = [...targets].sort((a, b) => {
+    const order = { HIGH: 0, MEDIUM: 1, LOW: 2 }
+    return (order[a.priority as keyof typeof order] ?? 3) - (order[b.priority as keyof typeof order] ?? 3)
+  })
+
+  function captureUrl(company: string, jobTitle: string) {
+    const p = new URLSearchParams({ company, jobTitle, conferenceId, conferenceName })
+    return `/capture?${p.toString()}`
+  }
+
+  return (
+    <div className="card space-y-4">
+      <div>
+        <h3 className="font-semibold text-sm text-content-primary">Suggested Leads</h3>
+        <p className="text-xs text-content-muted mt-0.5">Quick-fill the capture form for common roles at each target company</p>
+      </div>
+
+      <div className="space-y-4">
+        {sorted.map(t => (
+          <div key={t.id} className="space-y-2">
+            {/* Company header */}
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded bg-brand-navy/10 flex items-center justify-center text-[10px] font-bold text-brand-navy flex-shrink-0">
+                {t.company[0]?.toUpperCase()}
+              </div>
+              <span className="text-sm font-semibold text-content-primary">{t.company}</span>
+              <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
+              <Link
+                href={captureUrl(t.company, '')}
+                className="ml-auto text-[11px] font-medium px-2.5 py-1 rounded-full border border-brand-navy/30 bg-brand-navy/5 text-brand-navy hover:bg-brand-navy/10 transition-colors flex-shrink-0"
+              >
+                Add Lead →
+              </Link>
+            </div>
+
+            {/* Description if available */}
+            {t.description && (
+              <p className="text-xs text-content-secondary leading-relaxed pl-8">{t.description}</p>
+            )}
+
+            {/* Known contact as primary chip */}
+            {t.contactName && t.contactRole && (
+              <Link
+                href={captureUrl(t.company, t.contactRole)}
+                className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border-2 border-brand-navy/30 bg-brand-navy/5 hover:bg-brand-navy/10 hover:border-brand-navy/50 transition-colors"
+              >
+                <div className="w-5 h-5 rounded-full bg-brand-navy flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
+                  {t.contactName[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-brand-navy leading-tight">{t.contactName}</p>
+                  <p className="text-[10px] text-content-muted leading-tight">{t.contactRole}</p>
+                </div>
+                <span className="text-[10px] font-medium text-brand-navy flex-shrink-0">Fill form →</span>
+              </Link>
+            )}
+
+            {/* Generic role chips */}
+            <div className="flex flex-wrap gap-1.5">
+              {SUGGESTED_ROLES.map(role => (
+                <Link key={role} href={captureUrl(t.company, role)}
+                  className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-surface-border bg-white text-content-secondary hover:border-brand-accent/50 hover:text-brand-navy hover:bg-brand-navy/5 transition-colors">
+                  + {role}
+                </Link>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
