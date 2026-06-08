@@ -12,7 +12,7 @@ export default async function ConferenceDetailPage({ params }: { params: { id: s
     db.conference.findUnique({
       where: { id: params.id },
       include: {
-        assignments: { include: { user: { select: { id: true, name: true, role: true } } } },
+        assignments: { select: { id: true, userId: true, myFocus: true, user: { select: { id: true, name: true, role: true } } } },
         leads: {
           include: {
             lead: {

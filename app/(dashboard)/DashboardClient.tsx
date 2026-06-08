@@ -30,13 +30,17 @@ function daysUntil(date: Date) {
 
 export default function DashboardClient({ user, myConferences, todayLeads, assignments, totalLeads }: Props) {
   const router = useRouter()
-  const [currentConfId, setCurrentConfId] = useState(user.currentConferenceId || '')
+
+  // Auto-select an ongoing conference if the user hasn't picked one
+  const now = new Date()
+  const ongoingConf = myConferences.find(c => new Date(c.startDate) <= now && new Date(c.endDate) >= now)
+  const [currentConfId, setCurrentConfId] = useState(user.currentConferenceId || ongoingConf?.id || '')
   const [saving, setSaving] = useState(false)
 
   const currentConf = myConferences.find(c => c.id === currentConfId) ?? null
   // Clear stale ID if the conference is no longer in assignments
   if (currentConfId && !currentConf) { setCurrentConfId('') }
-  const nextConf = assignments.find(c => new Date(c.startDate) > new Date())
+  const nextConf = assignments.find(c => new Date(c.startDate) > now)
   const daysToNext = nextConf ? daysUntil(new Date(nextConf.startDate)) : null
 
   async function saveCurrentConference(id: string) {
