@@ -97,7 +97,7 @@ export default function ConferenceCalendarClient({
     setExtractError(null)
     setAddingKeys(new Set())
     setAddedKeys(new Set())
-    if (conf.website) runExtractFor(conf.id, undefined)
+    runExtractFor(conf.id, undefined)
   }
 
   async function runExtractFor(confId: string, overrideUrl?: string) {

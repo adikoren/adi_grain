@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { extractConferenceCompanies } from '@/lib/ai'
+import { identifyConferenceAttendees } from '@/lib/ai'
 import { getConfig } from '@/lib/config'
 
 async function fetchPageText(url: string): Promise<string | null> {
@@ -25,10 +25,6 @@ async function fetchPageText(url: string): Promise<string | null> {
   }
 }
 
-function normaliseBase(url: string): string {
-  return url.replace(/\/$/, '')
-}
-
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session || !['ADMIN', 'MANAGER'].includes(session.user.role)) {
@@ -45,11 +41,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const conference = await db.conference.findUnique({
     where: { id: params.id },
-    select: { name: true, website: true },
+    select: { name: true, website: true, city: true, country: true, verticals: true, estimatedAudience: true, startDate: true },
   })
   if (!conference) return NextResponse.json({ error: 'Conference not found' }, { status: 404 })
 
-  // URL from body overrides; otherwise fall back to conference.website
   let body: { url?: string } = {}
   try { body = await req.json() } catch { /* empty body is fine */ }
 
@@ -58,35 +53,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ? (overrideUrl.startsWith('http') ? overrideUrl : `https://${overrideUrl}`)
     : conference.website
 
-  if (!baseUrl) {
-    return NextResponse.json(
-      { error: 'No website URL saved for this conference. Enter a URL manually.' },
-      { status: 400 }
-    )
-  }
-
-  // Fetch the main URL plus common attendee subpages
-  const base = normaliseBase(baseUrl)
-  const urlsToTry = overrideUrl
-    ? [base]
-    : [base, `${base}/sponsors`, `${base}/exhibitors`, `${base}/speakers`]
-
-  const pageTexts: string[] = []
-  for (const url of urlsToTry) {
-    const text = await fetchPageText(url)
-    if (text) pageTexts.push(text.slice(0, 6000))
-  }
-
-  if (pageTexts.length === 0) {
-    return NextResponse.json(
-      { error: 'Could not fetch conference website. Try entering a specific URL.' },
-      { status: 400 }
-    )
+  // Try to fetch page content as supplementary context — not required
+  let pageContent: string | null = null
+  if (baseUrl) {
+    const base = baseUrl.replace(/\/$/, '')
+    const urlsToTry = overrideUrl
+      ? [base]
+      : [base, `${base}/sponsors`, `${base}/exhibitors`, `${base}/speakers`]
+    const texts: string[] = []
+    for (const url of urlsToTry) {
+      const text = await fetchPageText(url)
+      if (text) texts.push(text.slice(0, 5000))
+    }
+    if (texts.length > 0) pageContent = texts.join('\n\n---\n\n')
   }
 
   try {
-    const combined = pageTexts.join('\n\n---\n\n')
-    const companies = await extractConferenceCompanies(combined, conference.name)
+    const verticals: string[] = JSON.parse(conference.verticals || '[]')
+    const companies = await identifyConferenceAttendees({
+      name: conference.name,
+      city: conference.city,
+      country: conference.country,
+      verticals,
+      estimatedAudience: conference.estimatedAudience ?? undefined,
+      startDate: conference.startDate.toISOString().slice(0, 10),
+      pageContent: pageContent ?? undefined,
+    })
     return NextResponse.json({ companies })
   } catch (err: any) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

@@ -505,7 +505,7 @@ function TargetAccountsPanel({ conferenceId, conferenceName, conferenceWebsite, 
                   setAdding(false)
                   setExtractResults(null)
                   setExtractError(null)
-                  if (conferenceWebsite) runExtract()
+                  runExtract()
                 } else {
                   setExtractOpen(false)
                   setExtractResults(null)
@@ -529,20 +529,16 @@ function TargetAccountsPanel({ conferenceId, conferenceName, conferenceWebsite, 
         <div className="bg-surface-raised rounded-xl p-4 space-y-3 border border-brand-accent/20">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-semibold text-content-primary">
-                {conferenceWebsite ? `Scanning ${conferenceWebsite}` : 'Enter a conference page URL'}
-              </p>
+              <p className="text-xs font-semibold text-content-primary">Finding attending companies</p>
               <p className="text-xs text-content-muted mt-0.5">
-                {conferenceWebsite
-                  ? 'AI scans sponsors, exhibitors, and speakers pages automatically.'
-                  : 'Paste a sponsors, exhibitors, or speakers URL.'}
+                AI identifies likely attendees from conference data{conferenceWebsite ? ' and website' : ''}. Add a specific URL to improve results.
               </p>
             </div>
             <button onClick={() => { setExtractOpen(false); setExtractResults(null); setExtractError(null) }} className="text-content-muted hover:text-content-primary text-lg leading-none flex-shrink-0">×</button>
           </div>
 
-          {/* Fallback URL input when no website is stored */}
-          {!conferenceWebsite && (
+          {/* Optional URL input to supplement AI results */}
+          {!extractLoading && !extractResults && !extractError && (
             <div className="flex gap-2">
               <input
                 className="input flex-1 text-xs"

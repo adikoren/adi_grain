@@ -125,12 +125,17 @@ Website: ${conf.website || 'N/A'}`
   }
 }
 
-// ── Feature: Conference company extraction ────────────────────────────────────
+// ── Feature: Conference attendee identification ───────────────────────────────
 
-export async function extractConferenceCompanies(
-  pageContent: string,
-  conferenceName: string
-): Promise<Array<{
+export async function identifyConferenceAttendees(conf: {
+  name: string
+  city: string
+  country: string
+  verticals: string[]
+  estimatedAudience?: number
+  startDate?: string
+  pageContent?: string
+}): Promise<Array<{
   name: string
   website: string | null
   contactName: string | null
@@ -141,7 +146,7 @@ export async function extractConferenceCompanies(
 }>> {
   const system = `You are a sales intelligence analyst at Grain, a fintech company providing FX hedging and risk management for businesses with currency exposure.
 
-Extract companies from conference sponsor, exhibitor, speaker, or agenda content that are relevant to Grain.
+Identify companies likely attending this conference that are relevant prospects for Grain.
 
 Grain's target customers:
 - Payment Service Providers (PSPs) with cross-border flows
@@ -151,15 +156,17 @@ Grain's target customers:
 - Travel companies, remittance companies
 - Companies with significant FX risk
 
+Use your knowledge of this conference and its typical attendees. If page content is provided, extract explicitly mentioned companies first, then supplement with likely attendees you know.
+
 Return a JSON array (max 25 items). Each item:
 {
   "name": "Company display name",
   "website": "URL or null",
-  "contactName": "Person name if mentioned, or null",
-  "contactRole": "Job title if mentioned, or null",
+  "contactName": "Person name if mentioned in content, or null",
+  "contactRole": "Job title if mentioned in content, or null",
   "priority": "HIGH | MEDIUM | LOW",
   "companyType": "PSP | Bank | Fintech | Corporate | Travel | Remittance | Other",
-  "source": "sponsor | exhibitor | speaker | agenda | partner"
+  "source": "sponsor | exhibitor | speaker | known_attendee | likely_attendee"
 }
 
 Priority rules:
@@ -167,20 +174,25 @@ Priority rules:
 - MEDIUM: Fintech with international operations, marketplace, travel company, asset manager with FX exposure
 - LOW: Technology vendor, consultancy, regulator, media/events company
 
-Only extract companies explicitly mentioned in the content. Do not invent entries. If a company appears multiple times, include it once.`
+Always return at least 10 relevant companies. If page content lists them, use those. Otherwise use your knowledge of who attends this type of conference.`
 
-  try {
-    const raw = await callLLM(
-      `Conference: ${conferenceName}\n\nPage content:\n${pageContent.slice(0, 10000)}`,
-      system
-    )
-    const cleaned = raw.replace(/```json|```/g, '').trim()
-    const match = cleaned.match(/\[[\s\S]*\]/)
-    if (!match) return []
-    return JSON.parse(match[0])
-  } catch {
-    return []
-  }
+  const contentSection = conf.pageContent
+    ? `\n\nConference page content (use this first):\n${conf.pageContent.slice(0, 8000)}`
+    : ''
+
+  const prompt = `Conference: ${conf.name}
+Location: ${conf.city}, ${conf.country}
+Date: ${conf.startDate || 'upcoming'}
+Verticals: ${conf.verticals.join(', ') || 'fintech, payments'}
+Audience size: ${conf.estimatedAudience || 'unknown'}${contentSection}
+
+Identify companies attending this conference that are relevant to Grain.`
+
+  const raw = await callLLM(prompt, system)
+  const cleaned = raw.replace(/```json|```/g, '').trim()
+  const match = cleaned.match(/\[[\s\S]*\]/)
+  if (!match) throw new Error('No JSON array in AI response')
+  return JSON.parse(match[0])
 }
 
 // ── Feature: Conference discovery (AI + web content) ─────────────────────────
