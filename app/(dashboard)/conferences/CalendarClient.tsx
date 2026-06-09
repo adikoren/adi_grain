@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ export default function ConferenceCalendarClient({
   myConferenceIds?: string[]
   reps?: Rep[]
 }) {
+  const router    = useRouter()
   const mySet     = new Set(myConferenceIds)
   const today     = new Date()
   const [year, setYear]       = useState(today.getFullYear())
@@ -171,6 +173,7 @@ export default function ConferenceCalendarClient({
       })
       if (!res.ok) throw new Error('Import failed')
       setImported(prev => new Set(prev).add(idx))
+      router.refresh()
     } catch {
       // leave importing state so user can retry
     } finally {

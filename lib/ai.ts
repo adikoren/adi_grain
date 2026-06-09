@@ -175,20 +175,34 @@ Return a JSON array of companies attending this conference relevant to Grain.`
 function parseJsonArray(raw: string): any[] {
   const cleaned = raw.replace(/```json|```/g, '').trim()
 
-  // Try direct array parse first
-  const arrMatch = cleaned.match(/\[[\s\S]*\]/)
-  if (arrMatch) {
-    try { return JSON.parse(arrMatch[0]) } catch { /* fall through */ }
+  // Try bracket-counting to find the first complete JSON array
+  const start = cleaned.indexOf('[')
+  if (start !== -1) {
+    let depth = 0, end = -1
+    for (let i = start; i < cleaned.length; i++) {
+      if (cleaned[i] === '[') depth++
+      else if (cleaned[i] === ']') { if (--depth === 0) { end = i; break } }
+    }
+    if (end !== -1) {
+      try { return JSON.parse(cleaned.slice(start, end + 1)) } catch { /* fall through */ }
+    }
   }
 
   // Try unwrapping {"companies": [...]} or similar object wrapper
-  const objMatch = cleaned.match(/\{[\s\S]*\}/)
-  if (objMatch) {
-    try {
-      const obj = JSON.parse(objMatch[0])
-      const arr = obj.companies ?? obj.attendees ?? obj.results ?? Object.values(obj).find(Array.isArray)
-      if (Array.isArray(arr)) return arr
-    } catch { /* fall through */ }
+  const objStart = cleaned.indexOf('{')
+  if (objStart !== -1) {
+    let depth = 0, objEnd = -1
+    for (let i = objStart; i < cleaned.length; i++) {
+      if (cleaned[i] === '{') depth++
+      else if (cleaned[i] === '}') { if (--depth === 0) { objEnd = i; break } }
+    }
+    if (objEnd !== -1) {
+      try {
+        const obj = JSON.parse(cleaned.slice(objStart, objEnd + 1))
+        const arr = obj.companies ?? obj.attendees ?? obj.results ?? Object.values(obj).find(Array.isArray)
+        if (Array.isArray(arr)) return arr
+      } catch { /* fall through */ }
+    }
   }
 
   throw new Error('Could not parse AI response as JSON. Please try again.')
