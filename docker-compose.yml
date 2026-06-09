@@ -1,11 +1,15 @@
-version: '3.8'
-
 services:
   app:
     build: .
     ports:
       - "3000:3000"
-    env_file: .env
+    # Copy .env.docker.example → .env.docker and fill in NEXTAUTH_SECRET + NEXTAUTH_URL
+    env_file:
+      - .env.docker
+    environment:
+      # Always use the Docker volume path regardless of what's in .env.docker
+      DATABASE_URL: "file:/data/grain.db"
+      NODE_ENV: "production"
     volumes:
       - grain_data:/data
     restart: unless-stopped
@@ -13,7 +17,8 @@ services:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 20s
 
 volumes:
   grain_data:

@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation'
 interface Props {
   user: { name: string; role: string; currentConferenceId?: string | null }
   myConferences: Array<{ id: string; name: string; city: string; country: string; startDate: Date; endDate: Date }>
-  todayLeads: Array<{ id: string; firstName: string; lastName: string; company: string; capturedAt: Date; conferences: Array<{ conference: { name: string } }> }>
-  assignments: Array<{ id: string; name: string; city: string; country: string; startDate: Date }>
+  recentLeads: Array<{ id: string; firstName: string; lastName: string; company: string; capturedAt: Date; conferences: Array<{ conference: { name: string } }> }>
+  todayLeadsCount: number
   totalLeads: number
 }
 
@@ -28,19 +28,30 @@ function daysUntil(date: Date) {
   return `${diff}d away`
 }
 
-export default function DashboardClient({ user, myConferences, todayLeads, assignments, totalLeads }: Props) {
+function confStatus(start: Date, end: Date) {
+  const now = Date.now()
+  const s = new Date(start).getTime()
+  const e = new Date(end).getTime()
+  if (s <= now && e >= now) return 'live'
+  if (s > now) return 'upcoming'
+  return 'past'
+}
+
+function fmtDate(d: Date) {
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+export default function DashboardClient({ user, myConferences, recentLeads, todayLeadsCount, totalLeads }: Props) {
   const router = useRouter()
 
-  // Auto-select an ongoing conference if the user hasn't picked one
   const now = new Date()
   const ongoingConf = myConferences.find(c => new Date(c.startDate) <= now && new Date(c.endDate) >= now)
   const [currentConfId, setCurrentConfId] = useState(user.currentConferenceId || ongoingConf?.id || '')
   const [saving, setSaving] = useState(false)
 
   const currentConf = myConferences.find(c => c.id === currentConfId) ?? null
-  // Clear stale ID if the conference is no longer in assignments
   if (currentConfId && !currentConf) { setCurrentConfId('') }
-  const nextConf = assignments.find(c => new Date(c.startDate) > now)
+  const nextConf = myConferences.find(c => new Date(c.startDate) > now)
   const daysToNext = nextConf ? daysUntil(new Date(nextConf.startDate)) : null
 
   async function saveCurrentConference(id: string) {
@@ -82,7 +93,7 @@ export default function DashboardClient({ user, myConferences, todayLeads, assig
             {currentConf && (
               <p className="text-xs text-white/50 mt-1">
                 {currentConf.city}, {currentConf.country} &nbsp;·&nbsp;
-                {new Date(currentConf.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}–{new Date(currentConf.endDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                {fmtDate(currentConf.startDate)}–{fmtDate(currentConf.endDate)}
               </p>
             )}
           </div>
@@ -98,7 +109,7 @@ export default function DashboardClient({ user, myConferences, todayLeads, assig
         <div className="border-t border-white/10 pt-3 flex items-center justify-between">
           <p className="text-xs text-white/40 flex items-center gap-1.5">
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            {todayLeads.length} lead{todayLeads.length !== 1 ? 's' : ''} captured today
+            {todayLeadsCount} lead{todayLeadsCount !== 1 ? 's' : ''} captured today
           </p>
           <button
             onClick={e => { e.stopPropagation(); router.push('/capture') }}
@@ -107,7 +118,6 @@ export default function DashboardClient({ user, myConferences, todayLeads, assig
             + Add Lead
           </button>
         </div>
-        {/* Conference selector */}
         <div className="mt-3 border-t border-white/10 pt-3">
           <select
             value={currentConfId}
@@ -127,10 +137,10 @@ export default function DashboardClient({ user, myConferences, todayLeads, assig
       {/* KPI row */}
       <div className="grid grid-cols-4 gap-3 mb-5">
         {[
-          { label: 'Leads today', value: todayLeads.length, sub: 'captured', color: 'text-content-primary' },
-          { label: 'Total leads', value: totalLeads, sub: 'all time', color: 'text-content-primary' },
-          { label: 'Conferences', value: assignments.length, sub: 'assigned', color: 'text-content-primary' },
-          { label: 'Active opps', value: Math.floor(totalLeads * 0.3), sub: 'in pipeline', color: 'text-brand-accent' },
+          { label: 'Leads today',  value: todayLeadsCount, sub: 'captured',    color: 'text-content-primary' },
+          { label: 'Total leads',  value: totalLeads,      sub: 'all time',    color: 'text-content-primary' },
+          { label: 'Conferences',  value: myConferences.length, sub: 'assigned', color: 'text-content-primary' },
+          { label: 'Active opps',  value: Math.floor(totalLeads * 0.3), sub: 'in pipeline', color: 'text-brand-accent' },
         ].map(k => (
           <div key={k.label} className="card-sm">
             <p className="text-[10px] text-content-muted font-medium mb-1">{k.label}</p>
@@ -140,65 +150,93 @@ export default function DashboardClient({ user, myConferences, todayLeads, assig
         ))}
       </div>
 
-      {/* Two-column: recent leads + my conferences */}
+      {/* Two-column: conferences (left/wider) + recent leads (right/smaller) */}
       <div className="grid lg:grid-cols-5 gap-4">
+
+        {/* Conferences — main panel */}
         <div className="card lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-content-primary">Leads Today</h3>
-            <Link href="/leads" className="text-xs text-brand-accent hover:underline">All leads →</Link>
+            <h3 className="text-sm font-semibold text-content-primary">My Conferences</h3>
+            <Link href="/conferences" className="text-xs text-brand-accent hover:underline">All →</Link>
           </div>
-          {todayLeads.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-content-muted mb-2">No leads captured today yet</p>
-              <Link href="/capture" className="text-xs text-brand-accent hover:underline">Add your first →</Link>
-            </div>
+          {myConferences.length === 0 ? (
+            <p className="text-sm text-content-muted py-4 text-center">No conferences assigned yet</p>
           ) : (
             <div>
-              {todayLeads.map((l, i) => (
-                <Link key={l.id} href={`/leads/${l.id}`}
-                  className={`flex items-center justify-between py-2.5 ${i < todayLeads.length - 1 ? 'border-b border-surface-border' : ''} hover:bg-surface-raised -mx-1 px-1 rounded-md transition-colors`}>
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-surface-raised flex items-center justify-center text-[10px] font-bold text-brand-accent">
-                      {l.firstName[0]}{l.lastName[0]}
+              {myConferences.map((c, i) => {
+                const status = confStatus(c.startDate, c.endDate)
+                const d = status === 'upcoming' ? daysUntil(new Date(c.startDate)) : null
+                return (
+                  <Link
+                    key={c.id}
+                    href={`/conferences/${c.id}`}
+                    className={`flex items-center justify-between py-3 -mx-1 px-1 rounded-md hover:bg-surface-raised transition-colors ${i < myConferences.length - 1 ? 'border-b border-surface-border' : ''}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-1.5 h-8 rounded-full flex-shrink-0 ${
+                        status === 'live'     ? 'bg-emerald-400' :
+                        status === 'upcoming' ? 'bg-brand-accent' :
+                        'bg-surface-border'
+                      }`} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-content-primary truncate">{c.name}</p>
+                        <p className="text-xs text-content-muted">
+                          {c.city}, {c.country} · {fmtDate(c.startDate)}–{fmtDate(c.endDate)}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-content-primary">{l.firstName} {l.lastName}</p>
-                      <p className="text-xs text-content-muted">{l.company}</p>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                      {status === 'live' && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Live</span>
+                      )}
+                      {status === 'upcoming' && d && (
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${d === 'Today' || d === 'Tomorrow' ? 'bg-amber-100 text-amber-700' : 'bg-surface-muted text-content-muted'}`}>
+                          {d}
+                        </span>
+                      )}
+                      {status === 'past' && (
+                        <span className="text-[10px] text-content-muted">Past</span>
+                      )}
+                      <svg className="w-3.5 h-3.5 text-content-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
                     </div>
-                  </div>
-                  <span className="text-xs text-content-muted">
-                    {new Date(l.capturedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </Link>
-              ))}
+                  </Link>
+                )
+              })}
             </div>
           )}
         </div>
 
+        {/* Recent leads — compact panel */}
         <div className="card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-content-primary">My Conferences</h3>
-            <Link href="/conferences" className="text-xs text-brand-accent hover:underline">Calendar →</Link>
+            <h3 className="text-sm font-semibold text-content-primary">Recent Leads</h3>
+            <Link href="/leads" className="text-xs text-brand-accent hover:underline">All →</Link>
           </div>
-          {assignments.length === 0 ? (
-            <p className="text-sm text-content-muted py-4 text-center">No conferences assigned yet</p>
+          {recentLeads.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-sm text-content-muted mb-2">No leads yet</p>
+              <Link href="/capture" className="text-xs text-brand-accent hover:underline">Add your first →</Link>
+            </div>
           ) : (
             <div>
-              {assignments.slice(0, 4).map((c, i) => {
-                const d = daysUntil(new Date(c.startDate))
+              {recentLeads.map((l, i) => {
+                const isToday = new Date(l.capturedAt).toDateString() === now.toDateString()
                 return (
-                  <div key={c.id}
-                    className={`flex items-center justify-between py-2.5 ${i < Math.min(assignments.length, 4) - 1 ? 'border-b border-surface-border' : ''}`}>
-                    <div>
-                      <p className="text-sm font-medium text-content-primary truncate max-w-[130px]">{c.name}</p>
-                      <p className="text-xs text-content-muted">{c.city}</p>
+                  <Link key={l.id} href={`/leads/${l.id}`}
+                    className={`flex items-center gap-2.5 py-2.5 ${i < recentLeads.length - 1 ? 'border-b border-surface-border' : ''} hover:bg-surface-raised -mx-1 px-1 rounded-md transition-colors`}>
+                    <div className="w-7 h-7 rounded-full bg-surface-raised flex items-center justify-center text-[10px] font-bold text-brand-accent flex-shrink-0">
+                      {l.firstName[0]}{l.lastName[0]}
                     </div>
-                    {d && (
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${d === 'Today' ? 'bg-emerald-100 text-emerald-700' : 'bg-surface-muted text-content-muted'}`}>
-                        {d}
-                      </span>
-                    )}
-                  </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-content-primary truncate">{l.firstName} {l.lastName}</p>
+                      <p className="text-xs text-content-muted truncate">{l.company}</p>
+                    </div>
+                    <span className="text-[10px] text-content-muted flex-shrink-0">
+                      {isToday
+                        ? new Date(l.capturedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                        : new Date(l.capturedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                    </span>
+                  </Link>
                 )
               })}
             </div>

@@ -2,96 +2,151 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface Conference {
-  id: string
-  name: string
-  city: string
-  country: string
-  startDate: Date
-  endDate: Date
-  verticals: string
-  estimatedAudience: number | null
-  icpScore: number
-  status: string
-  website: string | null
-  assignments: Array<{ user: { id: string; name: string } }>
+  id: string; name: string; city: string; country: string
+  startDate: string; endDate: string; verticals: string
+  estimatedAudience: number | null; icpScore: number
+  status: string; website: string | null
+  assignments: Array<{ userId: string; role: string; user: { id: string; name: string } }>
   _count: { leads: number }
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+interface Rep { id: string; name: string }
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
-function confColor(isMine: boolean) {
-  return isMine ? 'bg-brand-navy text-white font-semibold' : 'bg-slate-200 text-slate-700'
-}
+// Deterministic per-rep color palette (index-assigned)
+const PALETTE = [
+  { pill: 'bg-emerald-100 text-emerald-900 border-emerald-200', dot: 'bg-emerald-500', badge: 'bg-emerald-100 border-emerald-300 text-emerald-800' },
+  { pill: 'bg-sky-100 text-sky-900 border-sky-200',             dot: 'bg-sky-500',     badge: 'bg-sky-100 border-sky-300 text-sky-800' },
+  { pill: 'bg-violet-100 text-violet-900 border-violet-200',   dot: 'bg-violet-500',  badge: 'bg-violet-100 border-violet-300 text-violet-800' },
+  { pill: 'bg-amber-100 text-amber-900 border-amber-200',       dot: 'bg-amber-500',   badge: 'bg-amber-100 border-amber-300 text-amber-800' },
+  { pill: 'bg-rose-100 text-rose-900 border-rose-200',          dot: 'bg-rose-500',    badge: 'bg-rose-100 border-rose-300 text-rose-800' },
+]
 
-function tier(score: number) {
-  return score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D'
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function tier(score: number) { return score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D' }
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
-function isInRange(day: Date, start: Date, end: Date) {
+function isInRange(day: Date, start: string, end: string) {
   const d = day.getTime()
   return d >= new Date(start).setHours(0,0,0,0) && d <= new Date(end).setHours(23,59,59,999)
 }
 
-export default function ConferenceCalendarClient({ conferences, isManager, myConferenceIds = [] }: { conferences: Conference[]; isManager: boolean; myConferenceIds?: string[] }) {
-  const mySet = new Set(myConferenceIds)
-  const today = new Date()
-  const [year, setYear] = useState(today.getFullYear())
-  const [month, setMonth] = useState(today.getMonth())
+function fmt(d: string, opts?: Intl.DateTimeFormatOptions) {
+  return new Date(d).toLocaleDateString('en-GB', opts || { day: 'numeric', month: 'short' })
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function ConferenceCalendarClient({
+  conferences, isManager, myConferenceIds = [], reps = [],
+}: {
+  conferences: Conference[]
+  isManager: boolean
+  myConferenceIds?: string[]
+  reps?: Rep[]
+}) {
+  const mySet     = new Set(myConferenceIds)
+  const today     = new Date()
+  const [year, setYear]       = useState(today.getFullYear())
+  const [month, setMonth]     = useState(today.getMonth())
   const [selected, setSelected] = useState<Conference | null>(null)
+  const [filterRep,  setFilterRep]  = useState<string>('all')
+  const [filterTier, setFilterTier] = useState<string>('all')
 
-  function prevMonth() {
-    if (month === 0) { setMonth(11); setYear(y => y - 1) }
-    else setMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (month === 11) { setMonth(0); setYear(y => y + 1) }
-    else setMonth(m => m + 1)
+  // Stable rep → color index mapping
+  const repColorIdx = useMemo(() => {
+    const map = new Map<string, number>()
+    reps.forEach((r, i) => map.set(r.id, i % PALETTE.length))
+    return map
+  }, [reps])
+
+  function repColor(repId: string) { return PALETTE[repColorIdx.get(repId) ?? 0] }
+
+  // Primary rep of a conference (first MANAGER-ROLE or first assignment)
+  function primaryRep(c: Conference) {
+    return c.assignments.find(a => a.role === 'PRIMARY') ?? c.assignments[0] ?? null
   }
 
-  // Build calendar grid (Mon-start)
+  // Color a conference pill for manager view
+  function managerPillCls(c: Conference): string {
+    const pr = primaryRep(c)
+    if (!pr) {
+      return tier(c.icpScore) === 'A'
+        ? 'bg-red-100 text-red-800 border-red-300'
+        : 'bg-slate-100 text-slate-600 border-slate-200'
+    }
+    return repColor(pr.userId).pill
+  }
+
+  // Filtered conference list
+  const filteredConfs = useMemo(() => {
+    if (!isManager) return conferences
+    return conferences.filter(c => {
+      if (filterTier !== 'all' && tier(c.icpScore) !== filterTier) return false
+      if (filterRep === 'unassigned') return c.assignments.length === 0
+      if (filterRep !== 'all') return c.assignments.some(a => a.userId === filterRep)
+      return true
+    })
+  }, [conferences, isManager, filterRep, filterTier])
+
+  function prevMonth() { if (month === 0) { setMonth(11); setYear(y => y-1) } else setMonth(m => m-1) }
+  function nextMonth() { if (month === 11) { setMonth(0); setYear(y => y+1) } else setMonth(m => m+1) }
+
+  // Calendar grid
   const days = useMemo(() => {
     const first = new Date(year, month, 1)
-    // Sunday-based: 0=Sun … 6=Sat
     const startOffset = first.getDay()
-    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const daysInMonth = new Date(year, month+1, 0).getDate()
     const cells: (Date | null)[] = Array(startOffset).fill(null)
     for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d))
     while (cells.length % 7 !== 0) cells.push(null)
     return cells
   }, [year, month])
 
-  // Map conferences to days they span
   const confsByDay = useMemo(() => {
     const map = new Map<string, Conference[]>()
     days.forEach(day => {
       if (!day) return
-      const key = day.toDateString()
-      const hits = conferences.filter(c => isInRange(day, new Date(c.startDate), new Date(c.endDate)))
-      if (hits.length) map.set(key, hits)
+      const hits = filteredConfs.filter(c => isInRange(day, c.startDate, c.endDate))
+      if (hits.length) map.set(day.toDateString(), hits)
     })
     return map
-  }, [days, conferences])
+  }, [days, filteredConfs])
 
   const monthConferences = useMemo(() =>
-    conferences.filter(c => {
-      const start = new Date(c.startDate)
-      return start.getFullYear() === year && start.getMonth() === month
+    filteredConfs.filter(c => {
+      const s = new Date(c.startDate)
+      return s.getFullYear() === year && s.getMonth() === month
     }),
-  [conferences, year, month])
+  [filteredConfs, year, month])
+
+  const unassignedCount  = monthConferences.filter(c => c.assignments.length === 0).length
+  const unassignedACount = monthConferences.filter(c => c.assignments.length === 0 && tier(c.icpScore) === 'A').length
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-4">
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Conference Calendar</h1>
-          <p className="text-content-muted text-sm mt-0.5">{monthConferences.length} conferences this month</p>
+          <h1 className="text-xl font-bold text-content-primary">Conference Calendar</h1>
+          <p className="text-content-muted text-xs mt-0.5">
+            {isManager
+              ? `${monthConferences.length} conferences this month${unassignedCount > 0 ? ` · ${unassignedCount} unassigned${unassignedACount > 0 ? ` (${unassignedACount} Tier A)` : ''}` : ''}`
+              : `${monthConferences.length} conferences this month`
+            }
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/conferences/all" className="btn-secondary text-sm">List view</Link>
@@ -101,57 +156,116 @@ export default function ConferenceCalendarClient({ conferences, isManager, myCon
         </div>
       </div>
 
-      {/* Month navigation */}
-      <div className="flex items-center gap-4">
+      {/* Manager filter bar */}
+      {isManager && (
+        <div className="flex items-center gap-5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] text-content-muted font-medium">Rep:</span>
+            {[
+              { id: 'all', label: 'All reps' },
+              ...reps.map(r => ({ id: r.id, label: r.name.split(' ')[0] })),
+              { id: 'unassigned', label: 'Unassigned' },
+            ].map(opt => (
+              <button key={opt.id} onClick={() => setFilterRep(opt.id)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  filterRep === opt.id
+                    ? 'bg-brand-navy text-white border-brand-navy'
+                    : 'bg-white text-content-secondary border-surface-border hover:border-brand-navy/40'
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-content-muted font-medium">Tier:</span>
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'A',   label: 'A', cls: 'text-emerald-700 border-emerald-200' },
+              { id: 'B',   label: 'B', cls: 'text-sky-700 border-sky-200' },
+              { id: 'C',   label: 'C', cls: 'text-slate-600 border-slate-200' },
+            ].map(opt => (
+              <button key={opt.id} onClick={() => setFilterTier(opt.id)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  filterTier === opt.id
+                    ? 'bg-brand-navy text-white border-brand-navy'
+                    : `bg-white ${(opt as any).cls ?? 'text-content-secondary border-surface-border'} hover:border-brand-navy/40`
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Month nav */}
+      <div className="flex items-center gap-3">
         <button onClick={prevMonth} className="p-2 rounded-md hover:bg-surface-raised transition-colors text-content-muted hover:text-content-primary">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
         </button>
-        <h2 className="text-lg font-semibold w-44 text-center">{MONTHS[month]} {year}</h2>
+        <h2 className="text-base font-semibold w-40 text-center">{MONTHS[month]} {year}</h2>
         <button onClick={nextMonth} className="p-2 rounded-md hover:bg-surface-raised transition-colors text-content-muted hover:text-content-primary">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
         </button>
         <button onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()) }}
-          className="ml-2 text-xs text-content-muted hover:text-content-primary px-2 py-1 rounded border border-surface-border hover:border-white/30 transition-colors">
+          className="text-xs text-content-muted hover:text-content-primary px-2 py-1 rounded border border-surface-border transition-colors">
           Today
         </button>
       </div>
 
       {/* Calendar grid */}
       <div className="card p-0 overflow-hidden">
-        {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-surface-border">
+        <div className="grid grid-cols-7 border-b border-surface-border bg-surface-raised/40">
           {DAYS.map(d => (
-            <div key={d} className="px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-content-muted text-center">{d}</div>
+            <div key={d} className="px-2 py-2 text-[10px] font-bold uppercase tracking-wide text-content-muted text-center">{d}</div>
           ))}
         </div>
-
-        {/* Weeks */}
         <div>
           {Array.from({ length: days.length / 7 }, (_, wi) => (
             <div key={wi} className="grid grid-cols-7 border-b border-surface-border last:border-0">
-              {days.slice(wi * 7, wi * 7 + 7).map((day, di) => {
+              {days.slice(wi*7, wi*7+7).map((day, di) => {
                 const isToday = day ? isSameDay(day, today) : false
                 const dayConfs = day ? (confsByDay.get(day.toDateString()) || []) : []
+                const isPast   = day ? day < today && !isToday : false
+
                 return (
-                  <div key={di} className={`min-h-[90px] p-1.5 border-r border-surface-border last:border-0 ${day ? '' : 'bg-surface-raised/30'}`}>
+                  <div key={di} className={`min-h-[100px] p-1.5 border-r border-surface-border last:border-0 ${
+                    !day ? 'bg-surface-raised/20' : isPast ? 'bg-white/60' : 'bg-white'
+                  }`}>
                     {day && (
                       <>
-                        <span className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1 ${
-                          isToday ? 'bg-brand-accent text-gray-900 font-bold' : 'text-content-muted'
-                        }`}>
-                          {day.getDate()}
-                        </span>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full ${
+                            isToday ? 'bg-brand-accent text-gray-900 font-bold' : isPast ? 'text-content-muted/50' : 'text-content-muted'
+                          }`}>
+                            {day.getDate()}
+                          </span>
+                        </div>
                         <div className="space-y-0.5">
-                          {dayConfs.slice(0, 3).map(c => (
-                            <button
-                              key={c.id}
-                              onClick={() => setSelected(selected?.id === c.id ? null : c)}
-                              className={`w-full text-left text-[10px] px-1.5 py-0.5 rounded truncate transition-opacity hover:opacity-80 ${confColor(mySet.has(c.id))}`}
-                              title={`${tier(c.icpScore)} · ${c.name}`}
-                            >
-                              <span className="font-bold">{tier(c.icpScore)}</span> {c.name}
-                            </button>
-                          ))}
+                          {dayConfs.slice(0, 3).map(c => {
+                            const pr = primaryRep(c)
+                            const isUnassigned = !pr
+                            const isTierA = tier(c.icpScore) === 'A'
+                            const pillCls = isManager ? managerPillCls(c) : (mySet.has(c.id) ? 'bg-brand-navy text-white border-brand-navy' : 'bg-slate-100 text-slate-700 border-slate-200')
+                            const repInitial = pr ? pr.user.name[0] : null
+
+                            return (
+                              <button
+                                key={c.id}
+                                onClick={() => setSelected(selected?.id === c.id ? null : c)}
+                                title={`${tier(c.icpScore)} · ${c.name}${pr ? ` · ${pr.user.name}` : ' · Unassigned'}`}
+                                className={`w-full text-left text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 transition-opacity hover:opacity-80 ${pillCls}`}
+                              >
+                                {isManager && isUnassigned && isTierA && (
+                                  <span className="font-bold flex-shrink-0 text-red-600">!</span>
+                                )}
+                                <span className="font-bold flex-shrink-0">{tier(c.icpScore)}</span>
+                                <span className="truncate flex-1">{c.name}</span>
+                                {isManager && repInitial && (
+                                  <span className="font-bold flex-shrink-0 opacity-70">{repInitial}</span>
+                                )}
+                              </button>
+                            )
+                          })}
                           {dayConfs.length > 3 && (
                             <p className="text-[10px] text-content-muted px-1">+{dayConfs.length - 3} more</p>
                           )}
@@ -166,55 +280,128 @@ export default function ConferenceCalendarClient({ conferences, isManager, myCon
         </div>
       </div>
 
-      {/* Selected conference detail */}
-      {selected && (
-        <div className={`card border space-y-3 ${mySet.has(selected.id) ? 'border-blue-500/40' : 'border-surface-border'}`}>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <Link href={`/conferences/${selected.id}`} className="font-semibold text-lg hover:text-brand-accent transition-colors">{selected.name}</Link>
-                {mySet.has(selected.id) && <span className="badge bg-blue-500/20 text-blue-300 text-xs">My conference</span>}
-              </div>
-              <p className="text-content-muted text-sm">
-                {selected.city}, {selected.country} &middot;{' '}
-                {new Date(selected.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                {' – '}
-                {new Date(selected.endDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </p>
-            </div>
-            <button onClick={() => setSelected(null)} className="text-content-muted hover:text-content-primary text-lg leading-none">×</button>
-          </div>
-          <div className="flex flex-wrap gap-3 text-sm">
-            <span className="badge bg-surface-raised text-content-secondary">ICP {selected.icpScore}</span>
-            <span className="badge bg-surface-raised text-content-secondary">{selected.status}</span>
-            {(JSON.parse(selected.verticals || '[]') as string[]).map(v => (
-              <span key={v} className="badge bg-surface-raised text-content-secondary">{v}</span>
-            ))}
-            {selected.estimatedAudience && (
-              <span className="text-content-muted">{selected.estimatedAudience.toLocaleString()} attendees</span>
-            )}
-            <span className="text-content-muted">{selected._count.leads} leads</span>
-          </div>
-          {selected.assignments.length > 0 && (
-            <div className="flex gap-1 flex-wrap">
-              {selected.assignments.map(a => (
-                <span key={a.user.id} className="badge bg-brand-accent/10 text-brand-accent text-xs">{a.user.name}</span>
-              ))}
-            </div>
-          )}
-          {selected.website && (
-            <a href={selected.website} target="_blank" rel="noopener noreferrer" className="text-brand-accent text-sm hover:underline">
-              {selected.website} →
-            </a>
-          )}
+      {/* Manager legend */}
+      {isManager && reps.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap text-xs">
+          <span className="text-content-muted text-[11px] font-medium">Coverage:</span>
+          {reps.map((r, i) => {
+            const color = PALETTE[i % PALETTE.length]
+            return (
+              <span key={r.id} className="flex items-center gap-1.5">
+                <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${color.dot}`} />
+                <span className="text-content-secondary">{r.name}</span>
+              </span>
+            )
+          })}
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-red-400" />
+            <span className="text-content-secondary">Tier A unassigned</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-slate-300" />
+            <span className="text-content-secondary">Unassigned</span>
+          </span>
         </div>
       )}
 
-      {/* Legend */}
-      <div className="flex gap-4 text-xs text-content-muted">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-navy inline-block" />My conferences</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-200 inline-block" />Other conferences</span>
-      </div>
+      {/* Rep legend for sales view */}
+      {!isManager && (
+        <div className="flex gap-4 text-xs text-content-muted">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-navy inline-block" />My conferences</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-200 inline-block" />Other conferences</span>
+        </div>
+      )}
+
+      {/* Selected conference detail panel */}
+      {selected && (() => {
+        const pr  = primaryRep(selected)
+        const allReps = selected.assignments.map(a => a.user.name)
+        const isUnassigned = allReps.length === 0
+        const isMyConf = mySet.has(selected.id)
+        const color = pr ? repColor(pr.userId) : null
+
+        return (
+          <div className={`card border space-y-3 ${
+            isManager
+              ? isUnassigned && tier(selected.icpScore) === 'A'
+                ? 'border-red-300 bg-red-50/30'
+                : color ? `border-current` : 'border-surface-border'
+              : isMyConf ? 'border-blue-400/40' : 'border-surface-border'
+          }`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <Link href={`/conferences/${selected.id}`}
+                    className="font-semibold text-base hover:text-brand-accent transition-colors">{selected.name}</Link>
+                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded border ${
+                    tier(selected.icpScore) === 'A' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                    tier(selected.icpScore) === 'B' ? 'bg-sky-100 text-sky-800 border-sky-200' :
+                    'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}>
+                    {tier(selected.icpScore)} · {Math.round(selected.icpScore)}
+                  </span>
+                  {isMyConf && !isManager && <span className="badge bg-brand-navy/10 text-brand-navy text-xs">My conference</span>}
+                  {isManager && isUnassigned && (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200">
+                      {tier(selected.icpScore) === 'A' ? '⚠ No rep — critical' : 'Unassigned'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-content-muted">
+                  {selected.city}, {selected.country} · {fmt(selected.startDate)} – {fmt(selected.endDate, { day: 'numeric', month: 'short', year: 'numeric' })}
+                </p>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-content-muted hover:text-content-primary text-xl leading-none flex-shrink-0">×</button>
+            </div>
+
+            {/* Rep coverage */}
+            {isManager && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {allReps.length > 0 ? (
+                  <>
+                    <span className="text-xs text-content-muted">Covered by:</span>
+                    {selected.assignments.map(a => {
+                      const c = repColor(a.userId)
+                      return (
+                        <span key={a.userId} className={`text-xs font-medium px-2 py-0.5 rounded border ${c.badge}`}>
+                          {a.user.name}{a.role === 'PRIMARY' ? '' : ' (backup)'}
+                        </span>
+                      )
+                    })}
+                  </>
+                ) : (
+                  <span className="text-xs text-content-muted">No rep assigned</span>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="badge bg-surface-raised text-content-secondary">{selected.status}</span>
+              {(JSON.parse(selected.verticals || '[]') as string[]).map(v => (
+                <span key={v} className="badge bg-surface-raised text-content-secondary">{v}</span>
+              ))}
+              {selected.estimatedAudience && (
+                <span className="badge bg-surface-raised text-content-secondary">{selected.estimatedAudience.toLocaleString()} attendees</span>
+              )}
+              <span className="badge bg-surface-raised text-content-secondary">{selected._count.leads} leads</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Link href={`/conferences/${selected.id}`} className="text-sm text-brand-accent hover:underline">View details →</Link>
+              {selected.website && (
+                <a href={selected.website} target="_blank" rel="noopener noreferrer" className="text-sm text-content-muted hover:text-content-primary hover:underline">
+                  Website ↗
+                </a>
+              )}
+              {isManager && (
+                <Link href={`/manager/conferences/${selected.id}/edit`} className="text-sm text-content-muted hover:text-content-primary hover:underline">
+                  Edit →
+                </Link>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

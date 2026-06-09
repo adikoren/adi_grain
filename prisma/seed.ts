@@ -233,19 +233,19 @@ async function main() {
       ],
     },
     {
-      firstName: 'Daniel', lastName: 'Cohen', email: 'd.cohen@flywire.com',
-      company: 'Flywire', jobTitle: 'CFO',
+      firstName: 'Daniel', lastName: 'Cohen', email: 'd.cohen@stripe.com',
+      company: 'Stripe', jobTitle: 'VP Finance & Treasury',
       icpScore: 88, tags: ['fx_pain', 'decision_maker'],
       hubspotContactId: 'hs_003_daniel_cohen',
       appearances: [
-        { confName: 'FinTech Connect 2024', capturedBy: 'jake.martinez@grain.internal', date: '2024-11-27', notes: 'CFO of Flywire — education & healthcare payments. Significant FX complexity.' },
+        { confName: 'FinTech Connect 2024', capturedBy: 'jake.martinez@grain.internal', date: '2024-11-27', notes: 'CFO of Flywire — education & healthcare payments. Significant FX complexity. Now at Stripe.' },
         { confName: 'Money20/20 USA 2024', capturedBy: 'jake.martinez@grain.internal', date: '2024-10-28', notes: 'Quick intro at our booth. Followed up post-conference. Warm lead.' },
       ],
     },
     {
       firstName: 'Maya', lastName: 'Santos', email: 'maya.santos@airbnb.com',
       company: 'Airbnb', jobTitle: 'VP Finance & Payments',
-      icpScore: 90, tags: ['fx_pain', 'decision_maker', 'needs_followup'],
+      icpScore: 90, tags: ['fx_pain', 'decision_maker', 'needs_followup', 'NEEDS_REVIEW'],
       hubspotContactId: null,
       appearances: [
         { confName: 'AFP Annual Conference 2024', capturedBy: 'jake.martinez@grain.internal', date: '2024-10-21', notes: 'Airbnb VP Finance. Heavy cross-border FX. Said current solution "barely works".' },
@@ -265,7 +265,7 @@ async function main() {
     {
       firstName: 'Karl', lastName: 'Becker', email: 'k.becker@db.com',
       company: 'Deutsche Bank', jobTitle: 'MD, FX Structuring',
-      icpScore: 82, tags: ['fx_pain', 'needs_followup'],
+      icpScore: 82, tags: ['fx_pain', 'needs_followup', 'NEEDS_REVIEW'],
       hubspotContactId: null,
       appearances: [
         { confName: 'FX Week Europe 2024', capturedBy: 'sarah.chen@grain.internal', date: '2024-09-10', notes: 'Deutsche Bank — corporate FX structuring desk. Sees opportunity for automation.' },
@@ -282,7 +282,7 @@ async function main() {
     { firstName: 'Sarah', lastName: 'Okonkwo', email: 's.okonkwo@flutterwave.com', company: 'Flutterwave', jobTitle: 'VP Treasury', icpScore: 88, tags: ['fx_pain', 'decision_maker'], conf: 'Money20/20 USA 2024', rep: 'priya.nair@grain.internal', date: '2024-10-29', notes: 'Africa-focused PSP with major FX flows. VP of Treasury.', hubspot: 'hs_011' },
     // EuroFinance 2024
     { firstName: 'Hans', lastName: 'Schneider', email: 'h.schneider@siemens.com', company: 'Siemens', jobTitle: 'Head of FX Risk Management', icpScore: 90, tags: ['fx_pain', 'decision_maker', 'demo_requested'], conf: 'EuroFinance 2024', rep: 'sarah.chen@grain.internal', date: '2024-09-18', notes: 'Siemens HQ — manages billions in FX risk. Requested a product demo for October.', hubspot: 'hs_012' },
-    { firstName: 'Isabella', lastName: 'Rossi', email: 'i.rossi@enel.com', company: 'Enel', jobTitle: 'Group Treasury', icpScore: 78, tags: ['fx_pain'], conf: 'EuroFinance 2024', rep: 'sarah.chen@grain.internal', date: '2024-09-19', notes: 'Italian energy giant. FX exposure across LatAm operations.', hubspot: null },
+    { firstName: 'Isabella', lastName: 'Rossi', email: 'i.rossi@enel.com', company: 'Enel', jobTitle: 'Group Treasury', icpScore: 78, tags: ['fx_pain', 'NEEDS_REVIEW'], conf: 'EuroFinance 2024', rep: 'sarah.chen@grain.internal', date: '2024-09-19', notes: 'Italian energy giant. FX exposure across LatAm operations.', hubspot: null },
     // AFP 2024
     { firstName: 'Robert', lastName: 'Thompson', email: 'r.thompson@caterpillar.com', company: 'Caterpillar', jobTitle: 'Assistant Treasurer', icpScore: 83, tags: ['fx_pain', 'needs_followup'], conf: 'AFP Annual Conference 2024', rep: 'jake.martinez@grain.internal', date: '2024-10-22', notes: 'Global manufacturing — FX hedging across 50+ countries. Sent follow-up deck.', hubspot: 'hs_013' },
     { firstName: 'Linda', lastName: 'Foster', email: 'l.foster@hp.com', company: 'HP Inc', jobTitle: 'Head of Treasury Risk', icpScore: 87, tags: ['fx_pain', 'decision_maker', 'demo_requested'], conf: 'AFP Annual Conference 2024', rep: 'jake.martinez@grain.internal', date: '2024-10-23', notes: 'Active RFP for TMS. Grain shortlisted. Demo booked.', hubspot: 'hs_014' },
@@ -389,6 +389,23 @@ async function main() {
       })
     }
   }
+
+  // Failed sync log for Claire Dubois — demonstrates the "Sync failed" state in the demo
+  const claireDubois = await prisma.lead.findFirst({ where: { firstName: 'Claire', lastName: 'Dubois', company: 'Lydia' } })
+  if (claireDubois) {
+    const clairesLog = await prisma.hubspotSyncLog.findFirst({ where: { leadId: claireDubois.id } })
+    if (!clairesLog) {
+      await prisma.hubspotSyncLog.create({
+        data: {
+          leadId: claireDubois.id,
+          status: 'FAILED',
+          isMockSync: true,
+          response: JSON.stringify({ error: 'Contact property "email" value was not valid.', status: 400 }),
+          syncedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        },
+      })
+    }
+  }
   console.log('✓ HubSpot sync logs created')
 
   // ── Assign reps to upcoming conferences ──────────────────────────────────
@@ -413,8 +430,7 @@ async function main() {
     { conf: 'Currency Research Americas', rep: 'jake.martinez@grain.internal' },
     { conf: 'Phocuswright Conference', rep: 'jake.martinez@grain.internal' },
     { conf: 'FIA Expo', rep: 'jake.martinez@grain.internal' },
-    // Priya Nair — APAC + ME
-    { conf: 'Sibos 2026', rep: 'priya.nair@grain.internal' },
+    // Priya Nair — APAC + ME (Sibos 2026 intentionally unassigned — Tier A coverage gap for demo)
     { conf: 'Seamless Middle East', rep: 'priya.nair@grain.internal' },
     { conf: 'Seamless Asia', rep: 'priya.nair@grain.internal' },
     { conf: 'Singapore Fintech Festival', rep: 'priya.nair@grain.internal' },

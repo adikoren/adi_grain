@@ -8,17 +8,26 @@ export default async function HubspotPage() {
   const isManager = ['ADMIN', 'MANAGER'].includes(session!.user.role)
   if (!isManager) return <div className="p-6 text-red-400">Unauthorized</div>
 
-  const [syncLogs, config] = await Promise.all([
-    db.hubspotSyncLog.findMany({
-      include: { lead: { select: { firstName: true, lastName: true, company: true, email: true } } },
-      orderBy: { syncedAt: 'desc' },
-      take: 50,
+  const [leads, config] = await Promise.all([
+    db.lead.findMany({
+      include: {
+        conferences: {
+          include: { conference: { select: { name: true, startDate: true } } },
+          orderBy: { capturedAt: 'desc' },
+        },
+        capturedBy: { select: { name: true } },
+        syncLogs: { orderBy: { syncedAt: 'desc' }, take: 3 },
+      },
+      orderBy: { capturedAt: 'desc' },
     }),
-    db.systemConfig.findUnique({ where: { id: 'singleton' }, select: { hubspotMode: true, hubspotApiKey: true } }),
+    db.systemConfig.findUnique({
+      where: { id: 'singleton' },
+      select: { hubspotMode: true, hubspotApiKey: true },
+    }),
   ])
 
-  const successCount = syncLogs.filter(l => l.status === 'SUCCESS').length
-  const failCount = syncLogs.filter(l => l.status === 'FAILED').length
+  const mode = (config?.hubspotMode as 'MOCK' | 'REAL') || 'MOCK'
+  const hasApiKey = !!config?.hubspotApiKey
 
-  return <HubspotClient syncLogs={syncLogs} config={config} successCount={successCount} failCount={failCount} />
+  return <HubspotClient initialLeads={leads as any} mode={mode} hasApiKey={hasApiKey} />
 }

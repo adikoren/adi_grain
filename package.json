@@ -21,7 +21,6 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@next/swc-darwin-arm64": "^16.2.7",
     "@prisma/client": "^5.10.0",
     "@types/nodemailer": "^8.0.0",
     "bcryptjs": "^2.4.3",

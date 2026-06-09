@@ -46,6 +46,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   })
 
+  // Update assignment when explicitly sent (empty string = unassigned)
+  if ('assignedRepId' in body) {
+    await db.conferenceAssignment.deleteMany({ where: { conferenceId: params.id } })
+    if (body.assignedRepId) {
+      await db.conferenceAssignment.create({
+        data: {
+          conferenceId: params.id,
+          userId: body.assignedRepId,
+          assignedById: session.user.id,
+          role: 'PRIMARY',
+        },
+      })
+    }
+  }
+
   return NextResponse.json({ conference })
 }
 

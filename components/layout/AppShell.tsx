@@ -42,6 +42,7 @@ const navConfig = {
         links: [
           { href: '/conferences', label: 'Calendar', icon: CalendarIcon },
           { href: '/conferences/all', label: 'All Conferences', icon: BuildingIcon },
+          { href: '/manager/planning', label: 'Planning', icon: MapIcon },
         ],
       },
       {
@@ -70,6 +71,7 @@ const navConfig = {
         links: [
           { href: '/conferences', label: 'Calendar', icon: CalendarIcon },
           { href: '/conferences/all', label: 'All Conferences', icon: BuildingIcon },
+          { href: '/manager/planning', label: 'Planning', icon: MapIcon },
         ],
       },
       {

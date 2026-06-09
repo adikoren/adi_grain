@@ -14,6 +14,7 @@ export async function GET() {
     aiApiKeySet: !!cfg?.aiApiKey,
     hubspotMode: cfg?.hubspotMode,
     hubspotApiKeySet: !!cfg?.hubspotApiKey,
+    serperApiKeySet: !!cfg?.serperApiKey,
   })
 }
 
@@ -22,12 +23,13 @@ export async function POST(req: NextRequest) {
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
-  const { aiProvider, aiApiKey, hubspotMode, hubspotApiKey } = await req.json()
+  const { aiProvider, aiApiKey, hubspotMode, hubspotApiKey, serperApiKey } = await req.json()
   const data: any = {}
   if (aiProvider) data.aiProvider = aiProvider
   if (aiApiKey) data.aiApiKey = aiApiKey
   if (hubspotMode) data.hubspotMode = hubspotMode
   if (hubspotApiKey) data.hubspotApiKey = hubspotApiKey
+  if (serperApiKey) data.serperApiKey = serperApiKey
 
   const cfg = await db.systemConfig.upsert({
     where: { id: 'singleton' },

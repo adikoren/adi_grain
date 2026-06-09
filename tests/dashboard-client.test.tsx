@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockPush = vi.fn()
@@ -11,16 +11,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('next/link', () => ({
   default: ({ href, children, className }: any) => <a href={href} className={className}>{children}</a>,
 }))
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
-}))
 
 // Mock fetch
 global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) })
 
 import DashboardClient from '../app/(dashboard)/DashboardClient'
-
-const NOW = new Date('2026-06-08T12:00:00Z')
 
 function makeConf(overrides: Partial<any> = {}) {
   return {
@@ -37,8 +32,8 @@ function makeConf(overrides: Partial<any> = {}) {
 const defaultProps = {
   user: { name: 'Jake Martinez', role: 'SALES_PERSON', currentConferenceId: null },
   myConferences: [],
-  todayLeads: [],
-  assignments: [],
+  recentLeads: [],
+  todayLeadsCount: 0,
   totalLeads: 0,
 }
 
@@ -59,11 +54,11 @@ describe('DashboardClient', () => {
     const ongoing = makeConf({
       id: 'fx-week',
       name: 'FX Week US',
-      startDate: new Date('2026-06-08T00:00:00Z'),
-      endDate: new Date('2026-06-09T23:59:59Z'),
+      startDate: new Date(Date.now() - 1000 * 3600),
+      endDate: new Date(Date.now() + 1000 * 3600 * 24),
     })
     render(<DashboardClient {...defaultProps} myConferences={[ongoing]} />)
-    expect(screen.getByText('FX Week US')).toBeInTheDocument()
+    expect(screen.getAllByText('FX Week US').length).toBeGreaterThan(0)
   })
 
   it('prefers saved currentConferenceId over ongoing conference', () => {
@@ -71,15 +66,15 @@ describe('DashboardClient', () => {
     const ongoing = makeConf({
       id: 'fx-week',
       name: 'FX Week US',
-      startDate: new Date('2026-06-08T00:00:00Z'),
-      endDate: new Date('2026-06-09T23:59:59Z'),
+      startDate: new Date(Date.now() - 1000 * 3600),
+      endDate: new Date(Date.now() + 1000 * 3600 * 24),
     })
     render(<DashboardClient
       {...defaultProps}
       user={{ ...defaultProps.user, currentConferenceId: 'saved-conf' }}
       myConferences={[saved, ongoing]}
     />)
-    expect(screen.getByText('AFP Annual')).toBeInTheDocument()
+    expect(screen.getAllByText('AFP Annual').length).toBeGreaterThan(0)
   })
 
   it('clears stale conference ID when conference no longer in assignments', () => {
@@ -98,8 +93,7 @@ describe('DashboardClient', () => {
       user={{ ...defaultProps.user, currentConferenceId: 'c1' }}
       myConferences={[conf]}
     />)
-    expect(screen.getByText('Sibos 2026')).toBeInTheDocument()
-    // City appears in hero and dropdown — verify at least one instance
+    expect(screen.getAllByText('Sibos 2026').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/London/).length).toBeGreaterThan(0)
   })
 
@@ -127,11 +121,7 @@ describe('DashboardClient', () => {
   })
 
   it('shows today leads count', () => {
-    const leads = [
-      { id: 'l1', firstName: 'Alice', lastName: 'Smith', company: 'Acme', capturedAt: new Date(), conferences: [] },
-      { id: 'l2', firstName: 'Bob', lastName: 'Jones', company: 'Bobs', capturedAt: new Date(), conferences: [] },
-    ]
-    render(<DashboardClient {...defaultProps} todayLeads={leads} />)
+    render(<DashboardClient {...defaultProps} todayLeadsCount={2} />)
     expect(screen.getByText('2 leads captured today')).toBeInTheDocument()
   })
 
@@ -142,7 +132,7 @@ describe('DashboardClient', () => {
 
   it('shows no leads empty state', () => {
     render(<DashboardClient {...defaultProps} />)
-    expect(screen.getByText('No leads captured today yet')).toBeInTheDocument()
+    expect(screen.getByText('No leads yet')).toBeInTheDocument()
   })
 
   it('shows KPI row with totalLeads', () => {
@@ -150,15 +140,15 @@ describe('DashboardClient', () => {
     expect(screen.getByText('42')).toBeInTheDocument()
   })
 
-  it('shows My Conferences with "Today" badge for ongoing conference', () => {
+  it('shows "Live" badge for ongoing conference', () => {
     const ongoing = makeConf({
       id: 'fx',
       name: 'FX Week US',
-      startDate: new Date(Date.now() - 1000 * 3600), // started 1h ago
-      endDate: new Date(Date.now() + 1000 * 3600 * 24), // ends tomorrow
+      startDate: new Date(Date.now() - 1000 * 3600),
+      endDate: new Date(Date.now() + 1000 * 3600 * 24),
     })
-    render(<DashboardClient {...defaultProps} assignments={[ongoing]} />)
-    expect(screen.getByText('Today')).toBeInTheDocument()
+    render(<DashboardClient {...defaultProps} myConferences={[ongoing]} />)
+    expect(screen.getByText('Live')).toBeInTheDocument()
   })
 
   it('shows "Tomorrow" label for conference starting tomorrow', () => {
@@ -168,7 +158,7 @@ describe('DashboardClient', () => {
       startDate: new Date(Date.now() + 1000 * 3600 * 24),
       endDate: new Date(Date.now() + 1000 * 3600 * 48),
     })
-    render(<DashboardClient {...defaultProps} assignments={[tomorrow]} />)
+    render(<DashboardClient {...defaultProps} myConferences={[tomorrow]} />)
     expect(screen.getByText('Tomorrow')).toBeInTheDocument()
   })
 
@@ -191,8 +181,7 @@ describe('DashboardClient', () => {
   })
 
   it('no upcoming next conference message when no future assignments', () => {
-    render(<DashboardClient {...defaultProps} assignments={[]} />)
-    // Should not show "Next conference in X" anywhere
+    render(<DashboardClient {...defaultProps} />)
     expect(screen.queryByText(/Next conference in/)).not.toBeInTheDocument()
   })
 })

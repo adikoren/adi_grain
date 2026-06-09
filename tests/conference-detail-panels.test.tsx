@@ -281,43 +281,6 @@ describe('ConferenceDetailClient — Suggested Leads panel (rep view)', () => {
     expect(screen.getAllByText('Adyen').length).toBeGreaterThan(0)
   })
 
-  it('shows role chip buttons for each target company', () => {
-    const conf = makeConference({ targetAccounts: [makeTarget({ company: 'Stripe' })] })
-    render(<ConferenceDetailClient {...defaultProps} conference={conf} />)
-    switchToMyFocus()
-    expect(screen.getByText('+ CFO')).toBeInTheDocument()
-    expect(screen.getByText('+ VP Finance')).toBeInTheDocument()
-    expect(screen.getByText('+ Head of Payments')).toBeInTheDocument()
-  })
-
-  it('role chip links to /capture with company and jobTitle params', () => {
-    const conf = makeConference({ name: 'FX Week US', targetAccounts: [makeTarget({ company: 'Stripe' })] })
-    render(<ConferenceDetailClient {...defaultProps} conference={conf} />)
-    switchToMyFocus()
-    const cfoCip = screen.getByText('+ CFO').closest('a')!
-    expect(cfoCip.getAttribute('href')).toContain('/capture')
-    expect(cfoCip.getAttribute('href')).toContain('company=Stripe')
-    expect(cfoCip.getAttribute('href')).toContain('jobTitle=CFO')
-  })
-
-  it('role chip includes conferenceId param', () => {
-    const conf = makeConference({ id: 'conf1', targetAccounts: [makeTarget({ company: 'Stripe' })] })
-    render(<ConferenceDetailClient {...defaultProps} conference={conf} />)
-    switchToMyFocus()
-    const chip = screen.getByText('+ CFO').closest('a')!
-    expect(chip.getAttribute('href')).toContain('conferenceId=conf1')
-  })
-
-  it('role chip includes conferenceName param', () => {
-    const conf = makeConference({ name: 'FX Week US', targetAccounts: [makeTarget({ company: 'Stripe' })] })
-    render(<ConferenceDetailClient {...defaultProps} conference={conf} />)
-    switchToMyFocus()
-    const chip = screen.getByText('+ CFO').closest('a')!
-    const href = chip.getAttribute('href')!
-    const params = new URLSearchParams(href.split('?')[1] || '')
-    expect(params.get('conferenceName')).toBe('FX Week US')
-  })
-
   it('shows known contact as primary fill button when contactName+contactRole set', () => {
     const conf = makeConference({
       targetAccounts: [makeTarget({ contactName: 'Emily Chen', contactRole: 'Head of Payments' })]
@@ -325,19 +288,24 @@ describe('ConferenceDetailClient — Suggested Leads panel (rep view)', () => {
     render(<ConferenceDetailClient {...defaultProps} conference={conf} />)
     switchToMyFocus()
     expect(screen.getAllByText('Emily Chen').length).toBeGreaterThan(0)
-    expect(screen.getByText('Fill form →')).toBeInTheDocument()
+    expect(screen.getByText('Fill Form →')).toBeInTheDocument()
   })
 
-  it('known contact primary chip links with their role', () => {
+  it('known contact primary chip links with their role and name params', () => {
     const conf = makeConference({
       name: 'FX Week US',
       targetAccounts: [makeTarget({ company: 'Stripe', contactName: 'Emily Chen', contactRole: 'Head of Payments' })]
     })
     render(<ConferenceDetailClient {...defaultProps} conference={conf} />)
     switchToMyFocus()
-    const fillBtn = screen.getByText('Fill form →').closest('a')!
-    expect(fillBtn.getAttribute('href')).toContain('company=Stripe')
-    expect(fillBtn.getAttribute('href')).toContain('jobTitle=Head+of+Payments')
+    const fillBtn = screen.getByText('Fill Form →').closest('a')!
+    const href = fillBtn.getAttribute('href')!
+    const params = new URLSearchParams(href.split('?')[1] || '')
+    expect(href).toContain('/capture')
+    expect(params.get('company')).toBe('Stripe')
+    expect(params.get('jobTitle')).toBe('Head of Payments')
+    expect(params.get('firstName')).toBe('Emily')
+    expect(params.get('lastName')).toBe('Chen')
   })
 
   it('does not show known contact row when contactName is null', () => {
@@ -346,7 +314,12 @@ describe('ConferenceDetailClient — Suggested Leads panel (rep view)', () => {
     })
     render(<ConferenceDetailClient {...defaultProps} conference={conf} />)
     switchToMyFocus()
-    expect(screen.queryByText('Fill form →')).not.toBeInTheDocument()
+    // Generic "Fill Form →" header button is shown, but no contact chip with firstName/lastName
+    const fillLink = screen.getByText('Fill Form →').closest('a')!
+    const href = fillLink.getAttribute('href')!
+    const params = new URLSearchParams(href.split('?')[1] || '')
+    expect(params.get('firstName')).toBeFalsy()
+    expect(params.get('lastName')).toBeFalsy()
   })
 })
 

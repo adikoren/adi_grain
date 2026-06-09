@@ -38,30 +38,38 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { company, jobTitle, conferenceId, conferenceName, website, targetId } = await req.json()
-  const key = company.toLowerCase().trim()
+  let cached: Awaited<ReturnType<typeof db.companyEnrichment.findUnique>> = null
 
-  // ── Check DB cache first ──────────────────────────────────────────────────
-  const cached = await db.companyEnrichment.findUnique({ where: { company: key } })
-  if (cached && isFresh(cached.lastEnrichedAt)) {
-    return NextResponse.json({ suggestions: cached, source: 'cache' })
-  }
+  try {
+    const body = await req.json()
+    const { company, jobTitle, conferenceId, conferenceName, website, targetId } = body
 
-  // ── Need to generate ──────────────────────────────────────────────────────
-  const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
-  const provider = cfg?.aiProvider || 'OPENAI'
-  const apiKey = cfg?.aiApiKey || null
+    if (!company || typeof company !== 'string') {
+      return NextResponse.json({ suggestions: null, reason: 'ai_error', error: 'Missing company' })
+    }
 
-  if (!apiKey) {
-    // Return cached (even if stale) rather than showing an error when key is missing
-    if (cached) return NextResponse.json({ suggestions: cached, source: 'stale_cache' })
-    return NextResponse.json({ suggestions: null, reason: 'no_key' })
-  }
+    const key = company.toLowerCase().trim()
 
-  const websiteText = website ? await fetchWebsiteText(website) : null
-  const confContext = conferenceName ? ` attending ${conferenceName}` : conferenceId ? ' at an industry conference' : ''
+    // ── Check DB cache first ──────────────────────────────────────────────────
+    cached = await db.companyEnrichment.findUnique({ where: { company: key } })
+    if (cached && isFresh(cached.lastEnrichedAt)) {
+      return NextResponse.json({ suggestions: cached, source: 'cache' })
+    }
 
-  const systemPrompt = `You are a sales intelligence assistant at Grain, a fintech company providing FX (foreign exchange) hedging and risk management for businesses. Grain serves PSPs, payment providers, travel companies, and any business with FX exposure.
+    // ── Need to generate ──────────────────────────────────────────────────────
+    const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
+    const provider = cfg?.aiProvider || 'OPENAI'
+    const apiKey = cfg?.aiApiKey || null
+
+    if (!apiKey) {
+      if (cached) return NextResponse.json({ suggestions: cached, source: 'stale_cache' })
+      return NextResponse.json({ suggestions: null, reason: 'no_key' })
+    }
+
+    const websiteText = website ? await fetchWebsiteText(website) : null
+    const confContext = conferenceName ? ` attending ${conferenceName}` : conferenceId ? ' at an industry conference' : ''
+
+    const systemPrompt = `You are a sales intelligence assistant at Grain, a fintech company providing FX (foreign exchange) hedging and risk management for businesses. Grain serves PSPs, payment providers, travel companies, and any business with FX exposure.
 
 Your job is to produce a concise, practical company brief for a Grain sales rep before or during a meeting.
 
@@ -88,16 +96,15 @@ Rules:
 - suggestedPerson.firstName/lastName: only provide if you are confident from training data — otherwise null
 - Do NOT add any text outside the JSON object`
 
-  const websiteSection = websiteText
-    ? `\n\nCompany website content (use this for accurate context):\n${websiteText}`
-    : ''
+    const websiteSection = websiteText
+      ? `\n\nCompany website content (use this for accurate context):\n${websiteText}`
+      : ''
 
-  const prompt = `Company: ${company}
+    const prompt = `Company: ${company}
 Role to meet: ${jobTitle || 'Unknown'}${confContext}${websiteSection}
 
 Generate a Company Brief for a Grain sales rep.`
 
-  try {
     let raw: string
 
     if (provider === 'ANTHROPIC') {
@@ -129,9 +136,16 @@ Generate a Company Brief for a Grain sales rep.`
       raw = data.choices[0].message.content
     }
 
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('No JSON object in AI response')
-    const suggestions = JSON.parse(jsonMatch[0])
+    // Find balanced JSON object (greedy regex fails if AI adds trailing text with braces)
+    const start = raw.indexOf('{')
+    if (start === -1) throw new Error('No JSON object in AI response')
+    let depth = 0, end = -1
+    for (let i = start; i < raw.length; i++) {
+      if (raw[i] === '{') depth++
+      else if (raw[i] === '}') { if (--depth === 0) { end = i; break } }
+    }
+    if (end === -1) throw new Error('Unbalanced JSON in AI response')
+    const suggestions = JSON.parse(raw.slice(start, end + 1))
 
     // ── Persist to DB ─────────────────────────────────────────────────────
     await db.companyEnrichment.upsert({
@@ -187,6 +201,7 @@ Generate a Company Brief for a Grain sales rep.`
 
     return NextResponse.json({ suggestions, source: 'ai' })
   } catch (err) {
+    console.error('[suggest] error:', String(err))
     if (cached) return NextResponse.json({ suggestions: cached, source: 'stale_cache' })
     return NextResponse.json({ suggestions: null, reason: 'ai_error', error: String(err) })
   }

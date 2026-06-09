@@ -70,7 +70,7 @@ describe('GET /api/leads/companies', () => {
     expect(json.companies).toBeDefined()
     // The filter is passed to Prisma — confirm the DB was called with the filter
     const leadCall = mockDb.lead.findMany.mock.calls[0][0]
-    expect(leadCall.where).toEqual({ company: { contains: 'filter', mode: 'insensitive' } })
+    expect(leadCall.where).toEqual({ company: { contains: 'filter' } })
   })
 
   it('returns distinct companies (no duplicates)', async () => {

@@ -62,6 +62,7 @@ function setupFetch(leads: any[], conference = makeConf()) {
   mockFetch.mockImplementation(async (url: string) => {
     if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads }) }
     if (url.includes('/api/users/current-conference')) return { ok: true, json: async () => ({ conference }) }
+    if (url.includes('/api/conferences')) return { ok: true, json: async () => ({ conferences: [] }) }
     return { ok: true, json: async () => ({}) }
   })
 }
@@ -92,10 +93,10 @@ describe('CapturePage — form rendering', () => {
     await waitFor(() => expect(screen.getByText('Save Lead')).toBeInTheDocument())
   })
 
-  it('shows current conference name in subtitle', async () => {
+  it('shows current conference name in conference section', async () => {
     setupFetch([], makeConf('Money20/20'))
     render(<CapturePage />)
-    await waitFor(() => expect(screen.getByText(/@ Money20\/20/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/Money20\/20/)).toBeInTheDocument())
   })
 
   it('shows "Scan Business Card" scan option', async () => {
@@ -114,7 +115,7 @@ describe('CapturePage — URL param pre-fill', () => {
     mockSearchParams = new URLSearchParams('company=Stripe')
     render(<CapturePage />)
     await waitFor(() => {
-      const companyInput = screen.getByLabelText(/Company */i) as HTMLInputElement
+      const companyInput = screen.getByLabelText(/Company/i) as HTMLInputElement
       expect(companyInput.value).toBe('Stripe')
     })
   })
@@ -143,24 +144,24 @@ describe('CapturePage — URL param pre-fill', () => {
     mockSearchParams = new URLSearchParams('conferenceId=conf-xyz&conferenceName=FX+Week+US')
     render(<CapturePage />)
     await waitFor(() => {
-      expect(screen.getByText(/@ FX Week US/)).toBeInTheDocument()
+      expect(screen.getByText('FX Week US')).toBeInTheDocument()
     })
     // Should NOT have called current-conference when conferenceId is in URL
     const currentConfCalls = mockFetch.mock.calls.filter((c: any) => c[0].includes('current-conference'))
     expect(currentConfCalls.length).toBe(0)
   })
 
-  it('shows conference name from URL param in subtitle', async () => {
+  it('shows conference name from URL param in conference section', async () => {
     mockSearchParams = new URLSearchParams('conferenceId=c1&conferenceName=Sibos+2026')
     render(<CapturePage />)
-    await waitFor(() => expect(screen.getByText(/@ Sibos 2026/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Sibos 2026')).toBeInTheDocument())
   })
 
   it('empty fields when no URL params', async () => {
     mockSearchParams = new URLSearchParams()
     render(<CapturePage />)
     await waitFor(() => {
-      const companyInput = screen.getByLabelText(/Company */i) as HTMLInputElement
+      const companyInput = screen.getByLabelText(/Company/i) as HTMLInputElement
       expect(companyInput.value).toBe('')
     })
   })
@@ -179,50 +180,45 @@ describe('CapturePage — email exact match dedup', () => {
     setupFetch([existingLead])
   })
 
-  it('shows relationship context banner when email matches existing lead', async () => {
+  async function renderAndWaitForLeadsEmail() {
     const user = userEvent.setup()
     render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    await screen.findByText(/FinTech/)
+    return user
+  }
+
+  it('shows relationship context banner when email matches existing lead', async () => {
+    const user = await renderAndWaitForLeadsEmail()
     await user.type(screen.getByLabelText(/Email/i), 'alice@acme.com')
     await waitFor(() => expect(screen.getByText(/You've met Alice before!/)).toBeInTheDocument())
   })
 
   it('shows "Add to their history" button on match', async () => {
-    const user = userEvent.setup()
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    const user = await renderAndWaitForLeadsEmail()
     await user.type(screen.getByLabelText(/Email/i), 'alice@acme.com')
     await waitFor(() => expect(screen.getByText('✓ Add to their history')).toBeInTheDocument())
   })
 
   it('shows "Create new contact instead" option on email match', async () => {
-    const user = userEvent.setup()
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    const user = await renderAndWaitForLeadsEmail()
     await user.type(screen.getByLabelText(/Email/i), 'alice@acme.com')
     await waitFor(() => expect(screen.getByText('Create new contact instead')).toBeInTheDocument())
   })
 
   it('shows conference history in relationship context', async () => {
-    const user = userEvent.setup()
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    const user = await renderAndWaitForLeadsEmail()
     await user.type(screen.getByLabelText(/Email/i), 'alice@acme.com')
     await waitFor(() => expect(screen.getByText('FinTech 2024')).toBeInTheDocument())
   })
 
   it('shows engagement notes from previous meeting', async () => {
-    const user = userEvent.setup()
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    const user = await renderAndWaitForLeadsEmail()
     await user.type(screen.getByLabelText(/Email/i), 'alice@acme.com')
     await waitFor(() => expect(screen.getByText(/"Great chat"/)).toBeInTheDocument())
   })
 
   it('does NOT show relationship context for unknown email', async () => {
-    const user = userEvent.setup()
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    const user = await renderAndWaitForLeadsEmail()
     await user.type(screen.getByLabelText(/Email/i), 'unknown@other.com')
     await waitFor(() => {
       expect(screen.queryByText(/You've met/)).not.toBeInTheDocument()
@@ -230,9 +226,7 @@ describe('CapturePage — email exact match dedup', () => {
   })
 
   it('is case-insensitive for email matching', async () => {
-    const user = userEvent.setup()
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    const user = await renderAndWaitForLeadsEmail()
     await user.type(screen.getByLabelText(/Email/i), 'ALICE@ACME.COM')
     await waitFor(() => expect(screen.getByText(/You've met Alice before!/)).toBeInTheDocument())
   })
@@ -256,9 +250,9 @@ describe('CapturePage — fuzzy name similarity', () => {
   async function renderAndWaitForLeads() {
     const user = userEvent.setup()
     render(<CapturePage />)
-    // Wait for the conference subtitle to appear — proves both fetches have
-    // resolved and React has re-rendered with allLeads populated.
-    await screen.findByText(/@ FinTech World/)
+    // Wait for the conference badge to appear — proves current-conference fetch
+    // resolved and React re-rendered with allLeads populated.
+    await screen.findByText(/FinTech/)
     return user
   }
 
@@ -343,26 +337,27 @@ describe('CapturePage — warm relationship context card', () => {
     setupFetch([warmLead])
   })
 
-  it('shows Warm temperature badge on match', async () => {
+  async function renderAndWaitForWarm() {
     const user = userEvent.setup()
     render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    await screen.findByText(/FinTech/)
+    return user
+  }
+
+  it('shows Warm temperature badge on match', async () => {
+    const user = await renderAndWaitForWarm()
     await user.type(screen.getByLabelText(/Email/i), 'sarah@revolut.com')
     await waitFor(() => expect(screen.getByText('Warm')).toBeInTheDocument())
   })
 
   it('shows how many times previously met', async () => {
-    const user = userEvent.setup()
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    const user = await renderAndWaitForWarm()
     await user.type(screen.getByLabelText(/Email/i), 'sarah@revolut.com')
     await waitFor(() => expect(screen.getByText(/met 1× at conference/)).toBeInTheDocument())
   })
 
   it('shows company name in context card', async () => {
-    const user = userEvent.setup()
-    render(<CapturePage />)
-    await waitFor(() => expect(screen.getByLabelText(/Email/i)).toBeInTheDocument())
+    const user = await renderAndWaitForWarm()
     await user.type(screen.getByLabelText(/Email/i), 'sarah@revolut.com')
     await waitFor(() => expect(screen.getByText(/Revolut/)).toBeInTheDocument())
   })
@@ -441,7 +436,7 @@ describe('CapturePage — form submission', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenCalled())
     await user.type(screen.getByLabelText(/First name \*/i), 'Bob')
     await user.type(screen.getByLabelText(/Last name \*/i), 'Jones')
-    await user.type(screen.getByLabelText(/Company \*/i), 'PayCo')
+    await user.type(screen.getByLabelText(/Company/i), 'PayCo')
     await waitFor(() => expect(screen.getByText('Same person?')).toBeInTheDocument())
     await user.click(screen.getByText('Same person?'))
     await waitFor(() => expect(screen.getByText('✓ Same person')).toBeInTheDocument())
@@ -612,7 +607,7 @@ describe('CapturePage — business card scan (OCR)', () => {
     })
     setupFetch([knownLead])
     render(<CapturePage />)
-    await screen.findByText(/@ FinTech World/)
+    await screen.findByText(/FinTech/)
     triggerScan('Jane Doe\njane@corp.com\nFlutterwave')
     await waitFor(() => expect(screen.getByText(/You've met Jane before!/)).toBeInTheDocument())
   })
@@ -653,6 +648,7 @@ describe('CapturePage — company autocomplete', () => {
       }
       if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads: [] }) }
       if (url.includes('/api/users/current-conference')) return { ok: true, json: async () => ({ conference: { id: 'conf1', name: 'FinTech World' } }) }
+      if (url.includes('/api/conferences')) return { ok: true, json: async () => ({ conferences: [] }) }
       return { ok: true, json: async () => ({}) }
     })
   })
@@ -689,7 +685,6 @@ describe('CapturePage — company autocomplete', () => {
     const user = userEvent.setup()
     render(<CapturePage />)
     await waitFor(() => expect(screen.getByText('CFO')).toBeInTheDocument())
-    // There are multiple "CFO" elements (chip + potentially input), click the chip button
     const cfoChip = screen.getAllByText('CFO').find(el => el.closest('button'))
     await user.click(cfoChip!)
     await waitFor(() => {

@@ -23,6 +23,7 @@ interface TargetAccount {
   icpFit: string | null
   fxRelevance: string | null
   relevanceReason: string | null
+  companySize: string | null
   confidence: string | null
 }
 interface Conference {
@@ -330,7 +331,7 @@ export default function ConferenceDetailClient({
 
       {/* ── Tab: Leads ───────────────────────────────────────────── */}
       {tab === 'leads' && (
-        <LeadsPanel leads={displayLeads} isManager={isManager} conferenceId={conference.id} />
+        <LeadsPanel leads={displayLeads} isManager={isManager} conferenceId={conference.id} conferenceName={conference.name} />
       )}
 
       {/* ── Tab: HubSpot ─────────────────────────────────────────── */}
@@ -663,8 +664,8 @@ function PlanStatusPanel({ conference, onRefresh }: { conference: Conference; on
 }
 
 // ── Leads Panel ───────────────────────────────────────────────────────────────
-function LeadsPanel({ leads, isManager, conferenceId }: {
-  leads: Array<{ lead: Lead }>; isManager: boolean; conferenceId: string
+function LeadsPanel({ leads, isManager, conferenceId, conferenceName }: {
+  leads: Array<{ lead: Lead }>; isManager: boolean; conferenceId: string; conferenceName: string
 }) {
   const [search, setSearch] = useState('')
   const filtered = leads.filter(({ lead: l }) => {
@@ -679,7 +680,7 @@ function LeadsPanel({ leads, isManager, conferenceId }: {
           <input className="input max-w-xs" placeholder="Search leads…" value={search} onChange={e => setSearch(e.target.value)} />
           <span className="text-sm text-content-muted">{filtered.length} lead{filtered.length !== 1 ? 's' : ''}</span>
         </div>
-        <Link href="/capture" className="btn-primary text-sm">+ Add Lead</Link>
+        <Link href={`/capture?conferenceId=${conferenceId}&conferenceName=${encodeURIComponent(conferenceName)}`} className="btn-primary text-sm">+ Add Lead</Link>
       </div>
 
       {filtered.length === 0 ? (
@@ -947,6 +948,7 @@ function CompanyBriefPanel({ company, website, contactRole, conferenceName, targ
   const [brief, setBrief] = useState<CompanyBrief | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<'no_key' | 'ai_error' | null>(null)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
 
   // Auto-load cached brief from DB on mount — no click required
   useEffect(() => {
@@ -959,6 +961,7 @@ function CompanyBriefPanel({ company, website, contactRole, conferenceName, targ
   async function fetchBrief() {
     setLoading(true)
     setError(null)
+    setErrorDetail(null)
     try {
       const res = await fetch('/api/leads/suggest', {
         method: 'POST',
@@ -970,9 +973,11 @@ function CompanyBriefPanel({ company, website, contactRole, conferenceName, targ
         setBrief(data.suggestions as CompanyBrief)
       } else {
         setError(data.reason === 'no_key' ? 'no_key' : 'ai_error')
+        if (data.error) setErrorDetail(String(data.error))
       }
-    } catch {
+    } catch (e) {
       setError('ai_error')
+      setErrorDetail(e instanceof Error ? e.message : 'Network error')
     } finally {
       setLoading(false)
     }
@@ -1016,7 +1021,10 @@ function CompanyBriefPanel({ company, website, contactRole, conferenceName, targ
             <p className="text-xs text-amber-700">AI not configured. Ask your admin to add an API key in Settings.</p>
           )}
           {!loading && !brief && error === 'ai_error' && (
-            <p className="text-xs text-content-muted">Could not load brief. <button type="button" className="underline" onClick={fetchBrief}>Try again</button></p>
+            <div className="text-xs text-content-muted space-y-1">
+              <p>Could not load brief. <button type="button" className="underline" onClick={fetchBrief}>Try again</button></p>
+              {errorDetail && <p className="text-red-500 font-mono break-all">{errorDetail}</p>}
+            </div>
           )}
         </div>
       )}
@@ -1027,9 +1035,59 @@ function CompanyBriefPanel({ company, website, contactRole, conferenceName, targ
 function CompanyCard({ t, conferenceId, conferenceName }: {
   t: TargetAccount; conferenceId: string; conferenceName: string
 }) {
-  function captureUrl(company: string, jobTitle: string) {
-    const p = new URLSearchParams({ company, jobTitle, conferenceId, conferenceName })
+  const hasKnownContact = !!(t.contactName && t.contactRole)
+  const [enrichPerson, setEnrichPerson] = useState<any>(null)
+  const [enrichSource, setEnrichSource] = useState<string | null>(null)
+  const [enrichLoading, setEnrichLoading] = useState(!hasKnownContact && !!t.contactRole)
+
+  useEffect(() => {
+    if (hasKnownContact || !t.contactRole) return
+    const delay = Math.random() * 400
+    const timer = setTimeout(() => {
+      fetch('/api/leads/suggest-person', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company: t.company, jobTitle: t.contactRole, conferenceName }),
+      })
+        .then(r => r.json())
+        .then(data => { setEnrichPerson(data.person || null); setEnrichSource(data.source || null) })
+        .catch(() => {})
+        .finally(() => setEnrichLoading(false))
+    }, delay)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function buildUrl(opts: { jobTitle?: string; firstName?: string; lastName?: string; linkedinUrl?: string }) {
+    const p = new URLSearchParams({ company: t.company, conferenceId, conferenceName })
+    if (opts.jobTitle)   p.set('jobTitle', opts.jobTitle)
+    if (opts.firstName)  p.set('firstName', opts.firstName)
+    if (opts.lastName)   p.set('lastName', opts.lastName)
+    if (opts.linkedinUrl) p.set('linkedinUrl', opts.linkedinUrl)
     return `/capture?${p.toString()}`
+  }
+
+  function linkedinFull(hint: string | null) {
+    if (!hint) return undefined
+    return `https://${hint.replace(/^https?:\/\//, '')}`
+  }
+
+  const state: 'known' | 'loading' | 'verified' | 'possible' | 'persona' | 'empty' = (() => {
+    if (hasKnownContact) return 'known'
+    if (enrichLoading)   return 'loading'
+    if (!t.contactRole)  return 'empty'
+    if (!enrichPerson?.firstName) return 'persona'
+    const isVerified =
+      enrichSource === 'internal' ||
+      (enrichSource === 'web_search' && enrichPerson.confidence === 'high') ||
+      (enrichSource === 'cache' && !enrichPerson.needsReview && enrichPerson.confidence !== 'low')
+    return isVerified ? 'verified' : 'possible'
+  })()
+
+  // Split a "First Last" string into parts for URL params
+  function splitName(name: string) {
+    const parts = name.trim().split(' ')
+    return { firstName: parts[0] ?? '', lastName: parts.slice(1).join(' ') }
   }
 
   return (
@@ -1041,41 +1099,118 @@ function CompanyCard({ t, conferenceId, conferenceName }: {
         </div>
         <span className="text-sm font-semibold text-content-primary">{t.company}</span>
         <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
-        <CompanyBriefPanel company={t.company} website={t.website} contactRole={t.contactRole} conferenceName={conferenceName} targetId={t.id} />
-        <Link
-          href={captureUrl(t.company, '')}
-          className="ml-auto text-[11px] font-medium px-2.5 py-1 rounded-full border border-brand-navy/30 bg-brand-navy/5 text-brand-navy hover:bg-brand-navy/10 transition-colors flex-shrink-0"
-        >
-          Add Lead →
-        </Link>
+        {state === 'empty' && (
+          <Link href={buildUrl({})} className="ml-auto text-[11px] font-medium px-2.5 py-1 rounded-full border border-brand-navy/30 bg-brand-navy/5 text-brand-navy hover:bg-brand-navy/10 transition-colors flex-shrink-0">
+            Fill Form →
+          </Link>
+        )}
       </div>
 
-      {/* Known contact as primary chip */}
-      {t.contactName && t.contactRole && (
+      {/* Loading */}
+      {state === 'loading' && (
+        <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-content-muted">
+          <div className="w-3 h-3 border border-brand-navy/30 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          Searching for {t.contactRole}…
+        </div>
+      )}
+
+      {/* Known contact (confirmed in DB) */}
+      {state === 'known' && (() => {
+        const { firstName, lastName } = splitName(t.contactName!)
+        return (
+          <Link href={buildUrl({ jobTitle: t.contactRole!, firstName, lastName })}
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border-2 border-brand-navy/30 bg-brand-navy/5 hover:bg-brand-navy/10 hover:border-brand-navy/50 transition-colors"
+          >
+            <div className="w-5 h-5 rounded-full bg-brand-navy flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
+              {t.contactName![0]?.toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-semibold text-brand-navy leading-tight truncate">{t.contactName}</p>
+                <span className="text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium flex-shrink-0">Known</span>
+              </div>
+              <p className="text-[10px] text-content-muted leading-tight">{t.contactRole}</p>
+            </div>
+            <span className="text-[10px] font-medium text-brand-navy flex-shrink-0">Fill Form →</span>
+          </Link>
+        )
+      })()}
+
+      {/* Verified lead (high-confidence enrichment) */}
+      {state === 'verified' && enrichPerson && (
         <Link
-          href={captureUrl(t.company, t.contactRole)}
-          className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border-2 border-brand-navy/30 bg-brand-navy/5 hover:bg-brand-navy/10 hover:border-brand-navy/50 transition-colors"
+          href={buildUrl({
+            jobTitle:    t.contactRole || '',
+            firstName:   enrichPerson.firstName,
+            lastName:    enrichPerson.lastName || '',
+            linkedinUrl: linkedinFull(enrichPerson.linkedinHint),
+          })}
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border-2 border-emerald-300 bg-emerald-50 hover:bg-emerald-100/70 hover:border-emerald-400 transition-colors"
         >
-          <div className="w-5 h-5 rounded-full bg-brand-navy flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
-            {t.contactName[0]?.toUpperCase()}
+          <div className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
+            {enrichPerson.firstName[0]}{enrichPerson.lastName?.[0] || ''}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-brand-navy leading-tight">{t.contactName}</p>
-            <p className="text-[10px] text-content-muted leading-tight">{t.contactRole}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-semibold text-emerald-900 leading-tight truncate">{enrichPerson.firstName} {enrichPerson.lastName}</p>
+              <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium flex-shrink-0">Verified</span>
+            </div>
+            <p className="text-[10px] text-content-muted leading-tight truncate">{t.contactRole}</p>
+            {enrichPerson.linkedinHint && (
+              <p className="text-[10px] text-blue-600 leading-tight truncate">{enrichPerson.linkedinHint.replace(/^https?:\/\//, '')}</p>
+            )}
           </div>
-          <span className="text-[10px] font-medium text-brand-navy flex-shrink-0">Fill form →</span>
+          <span className="text-[10px] font-medium text-emerald-700 flex-shrink-0">Fill Form →</span>
         </Link>
       )}
 
-      {/* Generic role chips */}
-      <div className="flex flex-wrap gap-1.5">
-        {SUGGESTED_ROLES.map(role => (
-          <Link key={role} href={captureUrl(t.company, role)}
-            className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-surface-border bg-white text-content-secondary hover:border-brand-accent/50 hover:text-brand-navy hover:bg-brand-navy/5 transition-colors">
-            + {role}
+      {/* Possible match — needs review */}
+      {state === 'possible' && enrichPerson && (
+        <div className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border-2 border-amber-200 bg-amber-50">
+          <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
+            {enrichPerson.firstName[0]}{enrichPerson.lastName?.[0] || ''}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-semibold text-amber-900 leading-tight truncate">{enrichPerson.firstName} {enrichPerson.lastName}</p>
+              <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-medium border border-amber-200 flex-shrink-0">Review</span>
+            </div>
+            <p className="text-[10px] text-content-muted leading-tight truncate">{t.contactRole}</p>
+            {enrichPerson.reasoning && (
+              <p className="text-[10px] text-amber-700/80 leading-tight italic truncate">{enrichPerson.reasoning}</p>
+            )}
+          </div>
+          <Link
+            href={buildUrl({
+              jobTitle:    t.contactRole || '',
+              firstName:   enrichPerson.firstName,
+              lastName:    enrichPerson.lastName || '',
+              linkedinUrl: linkedinFull(enrichPerson.linkedinHint),
+            })}
+            className="text-[10px] font-medium text-amber-700 hover:text-amber-900 flex-shrink-0 transition-colors"
+          >
+            Fill Form →
           </Link>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* Persona only — role suggested, no verified person */}
+      {state === 'persona' && (
+        <Link
+          href={buildUrl({ jobTitle: t.contactRole! })}
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-dashed border-content-muted/40 bg-surface-raised/50 hover:bg-surface-raised transition-colors"
+        >
+          <div className="w-5 h-5 rounded-full bg-content-muted/20 flex items-center justify-center text-[10px] font-bold text-content-muted flex-shrink-0">?</div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-medium text-content-secondary leading-tight truncate">{t.contactRole}</p>
+              <span className="text-[9px] px-1 py-0.5 rounded bg-slate-100 text-slate-500 font-medium flex-shrink-0">Persona</span>
+            </div>
+            <p className="text-[10px] text-content-muted leading-tight">No verified person found — fills role only</p>
+          </div>
+          <span className="text-[10px] font-medium text-content-muted flex-shrink-0">Fill Form →</span>
+        </Link>
+      )}
     </div>
   )
 }
@@ -1092,7 +1227,7 @@ function SuggestedLeadsPanel({ targets, conferenceId, conferenceName }: {
     <div className="card space-y-4">
       <div>
         <h3 className="font-semibold text-sm text-content-primary">Suggested Leads</h3>
-        <p className="text-xs text-content-muted mt-0.5">Click a role chip to open Add Lead pre-filled. Use 📋 Company Brief for a quick sales primer.</p>
+        <p className="text-xs text-content-muted mt-0.5">Verified leads fill all details. Personas fill company and role only.</p>
       </div>
       <div className="space-y-4">
         {sorted.map(t => (

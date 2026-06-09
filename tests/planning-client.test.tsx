@@ -14,32 +14,34 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-// Mock fetch for assign action
 const mockFetch = vi.fn().mockResolvedValue({ ok: true })
 vi.stubGlobal('fetch', mockFetch)
 
 function makeConference(overrides: Partial<any> = {}) {
-  return {
+  const raw = {
     id: `conf-${Math.random().toString(36).slice(2)}`,
     name: 'FinTech World',
     city: 'London',
     country: 'GB',
-    startDate: new Date('2025-10-01'),
-    endDate: new Date('2025-10-03'),
-    icpScore: 90, // Tier A (>=85 in ConferencesClient tier fn, but PlanningClient uses score>=85 → 'A')
+    startDate: '2025-10-01T00:00:00.000Z',
+    endDate: '2025-10-03T00:00:00.000Z',
+    icpScore: 90,
     attendingStatus: 'ATTENDING',
-    _count: { leads: 0 },
+    verticals: '[]',
+    notes: null,
+    _count: { leads: 0, targetAccounts: 0 },
     ...overrides,
   }
+  return raw
 }
 
-function makeAssignment(conferenceId: string, userId: string, userName: string) {
-  return { conferenceId, user: { id: userId, name: userName } }
+function makeAssignment(conferenceId: string, userId: string, userName: string, role = 'PRIMARY') {
+  return { conferenceId, userId, role, user: { id: userId, name: userName, role: 'SALES_PERSON' } }
 }
 
 const defaultUsers = [
-  { id: 'rep1', name: 'Alice Rep', role: 'SALES_PERSON' },
-  { id: 'rep2', name: 'Bob Rep', role: 'SALES_PERSON' },
+  { id: 'rep1', name: 'Alice Rep', email: 'alice@test.com', role: 'SALES_PERSON' },
+  { id: 'rep2', name: 'Bob Rep',   email: 'bob@test.com',   role: 'SALES_PERSON' },
 ]
 
 describe('PlanningClient', () => {
@@ -48,159 +50,128 @@ describe('PlanningClient', () => {
     mockFetch.mockResolvedValue({ ok: true })
   })
 
-  it('default view is "coverage" (Coverage Gaps tab active)', () => {
+  it('default view is "Team Coverage" tab', () => {
     render(<PlanningClient conferences={[]} users={[]} assignments={[]} isManager={true} />)
-    // Coverage Gaps tab should be visible and active
-    const coverageBtn = screen.getByText('Coverage Gaps')
-    expect(coverageBtn).toBeInTheDocument()
+    expect(screen.getByText('Team Coverage')).toBeInTheDocument()
+    expect(screen.getByText('Cluster Opportunities')).toBeInTheDocument()
+    expect(screen.getByText('Coverage Gaps')).toBeInTheDocument()
   })
 
-  it('Coverage Gaps tab shows unassigned Tier-A conferences with red border class', () => {
-    const conf = makeConference({ id: 'c1', name: 'Big FX Summit', icpScore: 90 }) // Tier A
+  it('Coverage Gaps tab shows critical Tier A unassigned conferences', async () => {
+    const user = userEvent.setup()
+    const conf = makeConference({ id: 'c1', name: 'Big FX Summit', icpScore: 90 })
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[]} isManager={true} />)
-    // Should see the "Tier A — No rep assigned" heading
-    expect(screen.getByText(/Tier A — No rep assigned/)).toBeInTheDocument()
+    await user.click(screen.getByText('Coverage Gaps'))
+    expect(screen.getByText(/Critical/i)).toBeInTheDocument()
     expect(screen.getByText('Big FX Summit')).toBeInTheDocument()
   })
 
-  it('Coverage Gaps tab shows unassigned Tier-B/C conferences with amber section', () => {
-    const conf = makeConference({ id: 'c1', name: 'Mid Conf', icpScore: 72 }) // Tier B (70-84)
-    render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[]} isManager={true} />)
-    expect(screen.getByText(/Tier B\/C — Unassigned/)).toBeInTheDocument()
-    expect(screen.getByText('Mid Conf')).toBeInTheDocument()
-  })
-
-  it('Coverage Gaps tab shows "All assigned" message when nothing unassigned', () => {
+  it('Coverage Gaps tab shows empty state when all conferences are assigned', async () => {
+    const user = userEvent.setup()
     const conf = makeConference({ id: 'c1', name: 'Assigned Conf', icpScore: 90 })
     const assignment = makeAssignment('c1', 'rep1', 'Alice Rep')
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[assignment]} isManager={true} />)
-    expect(screen.getByText(/All upcoming conferences have a rep assigned/)).toBeInTheDocument()
+    await user.click(screen.getByText('Coverage Gaps'))
+    expect(screen.getByText(/No coverage gaps detected/i)).toBeInTheDocument()
   })
 
-  it('Workload tab shows each rep\'s conference count', async () => {
-    const user = userEvent.setup()
+  it('Team Coverage tab (default) shows rep cards', () => {
     const conf = makeConference({ id: 'c1', name: 'Some Conf', icpScore: 90 })
     const assignment = makeAssignment('c1', 'rep1', 'Alice Rep')
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[assignment]} isManager={true} />)
-    await user.click(screen.getByText('Rep Workload'))
-    expect(screen.getByText('Alice Rep')).toBeInTheDocument()
+    // Name appears in rep card header + assigned row — use getAllByText
+    expect(screen.getAllByText('Alice Rep').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Bob Rep').length).toBeGreaterThan(0)
   })
 
-  it('Workload tab shows conference count number', async () => {
-    const user = userEvent.setup()
-    const conf = makeConference({ id: 'c1', name: 'Some Conf', icpScore: 90 })
+  it('Team Coverage shows conference name under assigned rep', () => {
+    const conf = makeConference({ id: 'c1', name: 'My Conference', icpScore: 88 })
     const assignment = makeAssignment('c1', 'rep1', 'Alice Rep')
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[assignment]} isManager={true} />)
-    await user.click(screen.getByText('Rep Workload'))
-    // Alice should have 1 conference
-    const ones = screen.getAllByText('1')
-    expect(ones.length).toBeGreaterThan(0)
+    expect(screen.getByText('My Conference')).toBeInTheDocument()
   })
 
-  it('Workload tab shows Tier A count', async () => {
+  it('Cluster Opportunities tab shows empty state when no clusters', async () => {
     const user = userEvent.setup()
-    const conf = makeConference({ id: 'c1', name: 'Tier A Conf', icpScore: 90 })
-    const assignment = makeAssignment('c1', 'rep1', 'Alice Rep')
-    render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[assignment]} isManager={true} />)
-    await user.click(screen.getByText('Rep Workload'))
-    // Should show multiple "Tier A" labels (summary stat + workload section)
-    const tierAElements = screen.getAllByText('Tier A')
-    expect(tierAElements.length).toBeGreaterThan(0)
-  })
-
-  it('Full List tab groups conferences by month', async () => {
-    const user = userEvent.setup()
-    const conf = makeConference({ id: 'c1', name: 'Oct Conf', startDate: new Date('2025-10-01') })
+    const conf = makeConference({ id: 'c1', name: 'Solo Conf', city: 'Paris', icpScore: 80 })
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[]} isManager={true} />)
-    await user.click(screen.getByText('Full List'))
-    // Should show the month group heading (h2 with October)
-    const headings = screen.getAllByRole('heading', { level: 2 })
-    const octoberHeading = headings.find(h => h.textContent?.includes('October'))
-    expect(octoberHeading).toBeInTheDocument()
-    expect(screen.getByText('Oct Conf')).toBeInTheDocument()
+    await user.click(screen.getByText('Cluster Opportunities'))
+    expect(screen.getByText(/No cluster opportunities/i)).toBeInTheDocument()
   })
 
-  it('Full List tab groups conferences in correct month groups', async () => {
+  it('Cluster Opportunities tab detects same-city cluster', async () => {
     const user = userEvent.setup()
-    const confOct = makeConference({ id: 'c1', name: 'OctoConf', startDate: new Date('2025-10-01') })
-    const confNov = makeConference({ id: 'c2', name: 'NovConf', startDate: new Date('2025-11-15') })
-    render(<PlanningClient conferences={[confOct, confNov]} users={defaultUsers} assignments={[]} isManager={true} />)
-    await user.click(screen.getByText('Full List'))
-    const headings = screen.getAllByRole('heading', { level: 2 })
-    const hasOctober = headings.some(h => h.textContent?.includes('October'))
-    const hasNovember = headings.some(h => h.textContent?.includes('November'))
-    expect(hasOctober).toBe(true)
-    expect(hasNovember).toBe(true)
+    const c1 = makeConference({ id: 'c1', name: 'London FX Forum', city: 'London', country: 'GB', startDate: '2025-10-01T00:00:00.000Z', endDate: '2025-10-02T00:00:00.000Z', icpScore: 90 })
+    const c2 = makeConference({ id: 'c2', name: 'London Payments', city: 'London', country: 'GB', startDate: '2025-10-08T00:00:00.000Z', endDate: '2025-10-09T00:00:00.000Z', icpScore: 85 })
+    render(<PlanningClient conferences={[c1, c2]} users={defaultUsers} assignments={[]} isManager={true} />)
+    await user.click(screen.getByText('Cluster Opportunities'))
+    expect(screen.getByText('London FX Forum')).toBeInTheDocument()
+    expect(screen.getByText('London Payments')).toBeInTheDocument()
   })
 
-  it('Summary stats show correct Upcoming count', () => {
+  it('KPI row shows correct upcoming count', () => {
     const conferences = [
       makeConference({ id: 'c1' }),
       makeConference({ id: 'c2' }),
       makeConference({ id: 'c3' }),
     ]
     render(<PlanningClient conferences={conferences} users={defaultUsers} assignments={[]} isManager={true} />)
-    // Find the stat card for 'Upcoming' specifically
     const upcomingLabel = screen.getByText('Upcoming')
-    const statCard = upcomingLabel.closest('div')
-    expect(statCard?.textContent).toContain('3')
+    expect(upcomingLabel.closest('div')?.textContent).toContain('3')
   })
 
-  it('Summary stats show correct Tier A count', () => {
+  it('KPI row shows correct Tier A count', () => {
     const conferences = [
-      makeConference({ id: 'c1', icpScore: 90 }), // Tier A
-      makeConference({ id: 'c2', icpScore: 72 }), // Tier B
-      makeConference({ id: 'c3', icpScore: 55 }), // Tier C
+      makeConference({ id: 'c1', icpScore: 90 }),
+      makeConference({ id: 'c2', icpScore: 72 }),
     ]
     render(<PlanningClient conferences={conferences} users={defaultUsers} assignments={[]} isManager={true} />)
-    // Summary has "Tier A" label - use getAllByText since workload section may also show it
+    // "Tier A" label appears in the KPI card; find all and check one has the right count
     const tierALabels = screen.getAllByText('Tier A')
     expect(tierALabels.length).toBeGreaterThan(0)
+    // The KPI stat card wrapping "Tier A" should contain the count 1
+    const tierAStatCard = tierALabels.find(el => el.closest('div')?.textContent?.includes('1'))
+    expect(tierAStatCard).toBeTruthy()
   })
 
-  it('Summary stats show correct Unassigned count', () => {
-    const conferences = [
-      makeConference({ id: 'c1' }),
-      makeConference({ id: 'c2' }),
-    ]
-    const assignments = [makeAssignment('c1', 'rep1', 'Alice')]
-    render(<PlanningClient conferences={conferences} users={defaultUsers} assignments={assignments} isManager={true} />)
-    expect(screen.getByText('Unassigned')).toBeInTheDocument()
-  })
-
-  it('Summary stats show Tier A unassigned count', () => {
+  it('KPI shows Tier A unassigned count', () => {
     const conferences = [makeConference({ id: 'c1', icpScore: 90 })]
     render(<PlanningClient conferences={conferences} users={defaultUsers} assignments={[]} isManager={true} />)
     expect(screen.getByText('Tier A unassigned')).toBeInTheDocument()
   })
 
-  it('manager sees assign dropdown in Coverage Gaps view', () => {
+  it('manager sees assign dropdown in Coverage Gaps for Tier A unassigned', async () => {
+    const user = userEvent.setup()
     const conf = makeConference({ id: 'c1', name: 'Unassigned Conf', icpScore: 90 })
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[]} isManager={true} />)
-    const dropdown = screen.getByDisplayValue('+ Assign rep')
-    expect(dropdown).toBeInTheDocument()
+    await user.click(screen.getByText('Coverage Gaps'))
+    expect(screen.getByDisplayValue('+ Assign rep')).toBeInTheDocument()
   })
 
-  it('non-manager does not see assign dropdown', () => {
+  it('non-manager does not see assign dropdowns', async () => {
+    const user = userEvent.setup()
     const conf = makeConference({ id: 'c1', name: 'Unassigned Conf', icpScore: 90 })
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[]} isManager={false} />)
+    await user.click(screen.getByText('Coverage Gaps'))
     expect(screen.queryByDisplayValue('+ Assign rep')).not.toBeInTheDocument()
   })
 
-  it('assign dropdown contains list of reps', () => {
+  it('assign dropdown contains list of reps', async () => {
+    const user = userEvent.setup()
     const conf = makeConference({ id: 'c1', icpScore: 90 })
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[]} isManager={true} />)
+    await user.click(screen.getByText('Coverage Gaps'))
     const select = screen.getByDisplayValue('+ Assign rep')
     expect(select).toBeInTheDocument()
-    // Should have rep options
     expect(screen.getByRole('option', { name: 'Alice Rep' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Bob Rep' })).toBeInTheDocument()
   })
 
-  it('selecting a rep from dropdown triggers fetch to /api/trips', async () => {
+  it('selecting a rep triggers fetch to /api/trips', async () => {
     const user = userEvent.setup()
     const conf = makeConference({ id: 'c1', icpScore: 90 })
     render(<PlanningClient conferences={[conf]} users={defaultUsers} assignments={[]} isManager={true} />)
+    await user.click(screen.getByText('Coverage Gaps'))
     const select = screen.getByDisplayValue('+ Assign rep')
     await user.selectOptions(select, 'rep1')
     expect(mockFetch).toHaveBeenCalledWith('/api/trips', expect.objectContaining({ method: 'POST' }))
@@ -216,19 +187,16 @@ describe('PlanningClient', () => {
     expect(screen.queryByText('+ Add Conference')).not.toBeInTheDocument()
   })
 
-  it('tab navigation switches to Rep Workload view', async () => {
-    const user = userEvent.setup()
-    render(<PlanningClient conferences={[]} users={defaultUsers} assignments={[]} isManager={true} />)
-    await user.click(screen.getByText('Rep Workload'))
-    // The workload section should now be visible; users section renders
-    expect(screen.getByText('Alice Rep')).toBeInTheDocument()
-  })
-
-  it('tab navigation switches to Full List view', async () => {
-    const user = userEvent.setup()
-    const conf = makeConference({ id: 'c1', name: 'List Conf', startDate: new Date('2025-10-01') })
-    render(<PlanningClient conferences={[conf]} users={[]} assignments={[]} isManager={false} />)
-    await user.click(screen.getByText('Full List'))
-    expect(screen.getByText('List Conf')).toBeInTheDocument()
+  it('overloaded rep gets warning badge when 4+ events in 30 days', () => {
+    const base = new Date('2025-10-01').getTime()
+    const confs = Array.from({ length: 4 }, (_, i) => makeConference({
+      id: `c${i}`, name: `Conf ${i}`, city: `City${i}`,
+      startDate: new Date(base + i * 5 * 86400000).toISOString(),
+      endDate: new Date(base + i * 5 * 86400000 + 86400000).toISOString(),
+      icpScore: 70,
+    }))
+    const assignments = confs.map(c => makeAssignment(c.id, 'rep1', 'Alice Rep'))
+    render(<PlanningClient conferences={confs} users={defaultUsers} assignments={assignments} isManager={true} />)
+    expect(screen.getByText(/Overloaded/i)).toBeInTheDocument()
   })
 })

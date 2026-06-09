@@ -1,20 +1,24 @@
 #!/bin/sh
 set -e
 
-echo "🌾 Grain Finance Intelligence Tool"
-echo "Running database migrations..."
-npx prisma migrate deploy --schema=./prisma/schema.prisma 2>/dev/null || \
-  npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss
+echo "=== Grain Finance Intelligence ==="
 
-# Seed only if DB is empty (check for admin user)
-USER_COUNT=$(npx prisma db execute --schema=./prisma/schema.prisma --stdin <<'EOF'
-SELECT COUNT(*) as count FROM "User";
-EOF
-2>/dev/null | grep -oE '[0-9]+' | tail -1 || echo "0")
+# Extract file path from DATABASE_URL (strips the "file:" prefix)
+DB_FILE="${DATABASE_URL#file:}"
 
-if [ "$USER_COUNT" = "0" ]; then
-  echo "Seeding initial data..."
-  node prisma/seed.js 2>/dev/null || echo "Seed skipped (compile seed manually if needed)"
+# Resolve to absolute path (handles both file:/abs and file:./rel)
+case "$DB_FILE" in
+  /*) DB_PATH="$DB_FILE" ;;
+  *)  DB_PATH="/app/$DB_FILE" ;;
+esac
+
+if [ ! -f "$DB_PATH" ]; then
+  echo "First run — loading demo database..."
+  mkdir -p "$(dirname "$DB_PATH")"
+  cp /app/prisma/seed-template.db "$DB_PATH"
+  echo "Demo data ready."
+else
+  echo "Database found at $DB_PATH"
 fi
 
 echo "Starting server on port ${PORT:-3000}..."

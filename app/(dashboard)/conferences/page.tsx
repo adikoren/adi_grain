@@ -7,11 +7,13 @@ export default async function ConferencesCalendarPage() {
   const session = await getServerSession(authOptions)
   const isManager = session?.user?.role === 'MANAGER' || session?.user?.role === 'ADMIN'
 
-  const [conferences, myAssignments] = await Promise.all([
+  const [conferences, myAssignments, reps] = await Promise.all([
     db.conference.findMany({
       orderBy: { startDate: 'asc' },
       include: {
-        assignments: { include: { user: { select: { id: true, name: true } } } },
+        assignments: {
+          select: { userId: true, role: true, user: { select: { id: true, name: true } } },
+        },
         _count: { select: { leads: true } },
       },
     }),
@@ -19,15 +21,19 @@ export default async function ConferencesCalendarPage() {
       where: { userId: session?.user?.id },
       select: { conferenceId: true },
     }),
+    db.user.findMany({
+      where: { isActive: true, role: 'SALES_PERSON' },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
   ])
-
-  const myConferenceIds = new Set(myAssignments.map(a => a.conferenceId))
 
   return (
     <ConferenceCalendarClient
-      conferences={conferences}
+      conferences={conferences as any}
       isManager={isManager}
-      myConferenceIds={Array.from(myConferenceIds)}
+      myConferenceIds={myAssignments.map(a => a.conferenceId)}
+      reps={reps}
     />
   )
 }

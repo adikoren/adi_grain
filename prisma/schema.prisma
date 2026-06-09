@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -82,6 +83,7 @@ model SystemConfig {
   aiApiKey      String?
   hubspotMode   String   @default("MOCK")
   hubspotApiKey String?
+  serperApiKey  String?
   updatedAt     DateTime @updatedAt
 }
 
@@ -191,6 +193,8 @@ model Lead {
   capturedAt         DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   currentCompany     String?
+  previousCompany    String?
+  previousJobTitle   String?
   aiSummary          String?
   aiSummaryAt        DateTime?
   relationshipStatus String?
@@ -233,11 +237,12 @@ model ContactMatch {
 }
 
 model HubspotSyncLog {
-  id       String   @id @default(cuid())
-  leadId   String
-  status   String
-  response String?
-  syncedAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  leadId     String
+  status     String
+  response   String?
+  isMockSync Boolean  @default(false)
+  syncedAt   DateTime @default(now())
 
   lead Lead @relation(fields: [leadId], references: [id])
 }
@@ -270,6 +275,8 @@ model PersonEnrichment {
   firstName       String?
   lastName        String?
   linkedinUrl     String?
+  sourceUrl       String?           // URL where person was found (web search result)
+  needsReview     Boolean  @default(false)  // true when confidence is uncertain
   summary         String?
   warmth          String?           // WARM | COLD | QUALIFIED
   previousContext String?           // filled when matched to internal lead

@@ -1,0 +1,31 @@
+# Dependencies — reinstalled inside Docker
+node_modules/
+
+# Next.js build output — rebuilt inside Docker
+.next/
+out/
+
+# Local database files — Docker uses a fresh seeded copy
+prisma/dev.db
+prisma/dev.db-journal
+prisma/seed-template.db
+
+# Secrets — supplied via env vars at runtime
+.env
+.env.local
+.env.docker
+.env.*.local
+
+# Test infrastructure
+tests/
+coverage/
+vitest.config.ts
+tsconfig.tsbuildinfo
+
+# Git
+.git/
+.gitignore
+
+# Docs and local tooling
+PRD.md
+*.md

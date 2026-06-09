@@ -9,8 +9,11 @@ function fmt(d: Date | string) {
   return new Date(d).toISOString().split('T')[0]
 }
 
-export default function EditConferenceClient({ conference }: { conference: any }) {
+interface Rep { id: string; name: string }
+
+export default function EditConferenceClient({ conference, reps = [] }: { conference: any; reps?: Rep[] }) {
   const router = useRouter()
+  const primaryAssignment = conference.assignments?.find((a: any) => a.role === 'PRIMARY') ?? conference.assignments?.[0] ?? null
   const [form, setForm] = useState({
     name: conference.name || '',
     website: conference.website || '',
@@ -22,6 +25,7 @@ export default function EditConferenceClient({ conference }: { conference: any }
     icpScore: conference.icpScore?.toString() || '',
     notes: conference.notes || '',
     status: conference.status || 'DRAFT',
+    assignedRepId: primaryAssignment?.userId ?? '',
   })
   const [verticals, setVerticals] = useState<string[]>(
     JSON.parse(conference.verticals || '[]')
@@ -159,6 +163,16 @@ export default function EditConferenceClient({ conference }: { conference: any }
             <option value="DRAFT">Draft</option>
             <option value="ELIGIBLE">Eligible</option>
             <option value="ARCHIVED">Archived</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="label">Assigned Sales Rep</label>
+          <select className="input" value={form.assignedRepId} onChange={e => set('assignedRepId', e.target.value)}>
+            <option value="">Unassigned</option>
+            {reps.map(r => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
           </select>
         </div>
 

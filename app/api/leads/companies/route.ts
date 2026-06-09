@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const targets = await db.targetAccount.findMany({
       where: {
         conferenceId,
-        ...(q ? { company: { contains: q, mode: 'insensitive' } } : {}),
+        ...(q ? { company: { contains: q } } : {}),
       },
       select: { company: true },
       orderBy: { company: 'asc' },
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   // 2) Distinct companies from existing leads
   const leads = await db.lead.findMany({
-    where: q ? { company: { contains: q, mode: 'insensitive' } } : {},
+    where: q ? { company: { contains: q } } : {},
     select: { company: true },
     orderBy: { company: 'asc' },
   })

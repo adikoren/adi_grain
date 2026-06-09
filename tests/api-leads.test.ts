@@ -197,12 +197,12 @@ describe('POST /api/leads', () => {
     )
   })
 
-  it('mergeLeadId not found → returns ok with null lead (lead.create skipped)', async () => {
+  it('mergeLeadId not found → returns 404 (lead.create skipped)', async () => {
     mockSession.fn.mockResolvedValue(salesSession)
     mockDb.lead.findUnique.mockResolvedValue(null)
     const req = makePostReq({ firstName: 'A', lastName: 'B', company: 'C', mergeLeadId: 'missing123', conferenceId: 'conf1' })
     const res = await POST(req)
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(404)
     expect(mockDb.lead.create).not.toHaveBeenCalled()
     expect(mockDb.conferenceLead.upsert).not.toHaveBeenCalled()
   })

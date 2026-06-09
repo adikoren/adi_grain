@@ -6,7 +6,114 @@ A sales intelligence platform for Grain Finance's field team to track fintech co
 
 ---
 
-## Quick Start (Local)
+## Docker — Local Run
+
+The fastest way to run the app. The Docker image has demo data baked in — no manual seeding needed.
+
+### 1. Create your env file
+
+```bash
+cp .env.docker.example .env.docker
+```
+
+Open `.env.docker` and set two values:
+
+```env
+NEXTAUTH_SECRET=<output of: openssl rand -base64 32>
+NEXTAUTH_URL=http://localhost:3000
+```
+
+Everything else can stay as-is for local use.
+
+### 2. Build and start
+
+```bash
+docker compose build
+docker compose up
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+The first `docker compose build` takes 3–5 minutes (it compiles the app and seeds the demo database inside the image). Subsequent builds are fast thanks to layer caching.
+
+### Demo login credentials
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@grain.internal` | `admin` | Admin |
+| `alex.kim@grain.internal` | `grain123` | Manager |
+| `sarah.chen@grain.internal` | `grain123` | Sales — Europe |
+| `jake.martinez@grain.internal` | `grain123` | Sales — Americas |
+| `priya.nair@grain.internal` | `grain123` | Sales — APAC |
+
+### Stopping and resetting
+
+```bash
+# Stop (keeps data)
+docker compose down
+
+# Stop and wipe demo data (fresh seed on next start)
+docker compose down -v
+```
+
+The SQLite database lives in the `grain_data` Docker volume at `/data/grain.db`. On first start the pre-seeded template is copied there automatically.
+
+---
+
+## Cloud Deployment
+
+### Railway (recommended for demos)
+
+1. Push the repo to GitHub.
+2. Create a new project at [railway.app](https://railway.app) → **Deploy from GitHub**.
+3. Railway auto-detects the `Dockerfile`.
+4. Add a **Volume**: mount point `/data`, size 1 GB.
+5. Set environment variables (Settings → Variables):
+
+   | Variable | Value |
+   |---|---|
+   | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
+   | `NEXTAUTH_URL` | `https://your-app.up.railway.app` |
+   | `DATABASE_URL` | `file:/data/grain.db` |
+
+6. Deploy. On first start the seeded database is copied automatically.
+
+### Render
+
+1. Create a new **Web Service** → Docker runtime → connect your GitHub repo.
+2. Add a **Persistent Disk**: mount path `/data`, size 1 GB.
+3. Set the same three env vars (`NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `DATABASE_URL`).
+4. Deploy.
+
+### Fly.io
+
+```bash
+# Install flyctl: https://fly.io/docs/hands-on/install-flyctl/
+
+fly launch --name grain-intel   # generates fly.toml, skip postgres
+fly volumes create grain_data --size 1 --region <your-region>
+fly secrets set \
+  NEXTAUTH_SECRET="$(openssl rand -base64 32)" \
+  NEXTAUTH_URL="https://grain-intel.fly.dev" \
+  DATABASE_URL="file:/data/grain.db"
+fly deploy
+```
+
+Add to `fly.toml`:
+
+```toml
+[[mounts]]
+  source      = "grain_data"
+  destination = "/data"
+```
+
+### Important: SQLite + single instance
+
+The app uses SQLite, which only supports one writer at a time. Run a **single instance** on your chosen platform — do not enable horizontal scaling. All three platforms above support single-instance deployments.
+
+---
+
+## Quick Start (Local Dev — no Docker)
 
 ### 1. Prerequisites
 
@@ -27,17 +134,7 @@ npm install
 cp .env.example .env.local
 ```
 
-Edit `.env.local`:
-
-```env
-DATABASE_URL="file:./grain.db"
-NEXTAUTH_SECRET="run-openssl-rand-base64-32"
-NEXTAUTH_URL="http://localhost:3000"
-
-# Optional: Google OAuth
-GOOGLE_CLIENT_ID=""
-GOOGLE_CLIENT_SECRET=""
-```
+Edit `.env.local` — set `NEXTAUTH_SECRET` and leave `DATABASE_URL="file:./dev.db"`.
 
 ### 4. Set up database
 
@@ -46,8 +143,6 @@ npx prisma db push
 npx prisma db seed
 ```
 
-This creates the SQLite database and seeds 50 fintech conferences + the admin user.
-
 ### 5. Run
 
 ```bash
@@ -55,86 +150,6 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000)
-
-**Default login:** `admin` / `admin`
-
----
-
-## Docker
-
-### Build and run
-
-```bash
-# Copy and edit env
-cp .env.example .env
-
-# Build image
-docker build -t grain-intel .
-
-# Run with persistent data volume
-docker run -d \
-  --name grain-intel \
-  -p 3000:3000 \
-  --env-file .env \
-  -v grain_data:/data \
-  grain-intel
-```
-
-Or with Docker Compose:
-
-```bash
-cp .env.example .env
-# Edit .env
-docker-compose up -d
-```
-
-The SQLite database is stored in the `/data` volume and persists across container restarts.
-
----
-
-## Free Hosting Options
-
-### Option 1: Railway (Recommended ✅)
-
-Railway offers $5/month free credits — enough for this app with SQLite.
-
-1. Create account at [railway.app](https://railway.app)
-2. New Project → Deploy from GitHub repo
-3. Add environment variables (Settings → Variables):
-   - `NEXTAUTH_SECRET` (generate: `openssl rand -base64 32`)
-   - `NEXTAUTH_URL` = `https://your-app.up.railway.app`
-   - `DATABASE_URL` = `file:/data/grain.db`
-   - Optionally: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-4. Add a Volume: mount at `/data`, size 1GB
-5. Railway auto-detects Dockerfile and deploys
-
-**Railway pro tip:** the app seeds itself on first run — no manual DB step needed.
-
-### Option 2: Fly.io
-
-```bash
-# Install flyctl
-curl -L https://fly.io/install.sh | sh
-
-# Launch
-fly launch --name grain-intel
-
-# Create persistent volume
-fly volumes create grain_data --size 1
-
-# Set secrets
-fly secrets set NEXTAUTH_SECRET="..." NEXTAUTH_URL="https://grain-intel.fly.dev"
-
-# Deploy
-fly deploy
-```
-
-In `fly.toml`, add:
-```toml
-[mounts]
-  source = "grain_data"
-  destination = "/data"
-```
 
 ---
 
@@ -170,19 +185,16 @@ If no key is set, the app uses rule-based ICP scoring (no AI calls).
 - **Mock mode** (default): leads are logged locally, no HubSpot API calls
 - **Real mode**: set your HubSpot Private App key in Admin → Settings
 
-To switch: Admin → Settings → HubSpot → select Real → enter key.
-
 ---
 
 ## Key Features
 
-- **Conference list** with ICP scoring, vertical filtering, and search
+- **Conference calendar** with ICP tier scoring, vertical filtering, and rep assignment
 - **Lead capture** with business card OCR scan (Tesseract.js) and auto-deduplication
 - **Cross-conference tracking**: load a contact to see all previous engagements
-- **Trip opportunity clustering**: haversine-based geographic grouping (≤500km, ≤7 day gap)
-- **AI conference discovery**: fetches public fintech event sites, extracts structured data
+- **Manager planning**: cluster detection, coverage gaps, Tier A alerts
+- **HubSpot sync**: mock or real mode, per-lead status and retry
 - **Role-gated screens**: separate flows for reps vs managers
-- **HubSpot sync**: mock or real, per-lead sync log
 
 ---
 
@@ -191,34 +203,35 @@ To switch: Admin → Settings → HubSpot → select Real → enter key.
 ```
 grain/
 ├── app/                    # Next.js App Router
-│   ├── (dashboard)/        # Sales person screens
-│   ├── manager/            # Manager screens
-│   ├── admin/              # Admin screens
+│   ├── (dashboard)/        # Sales person screens + manager dashboard
+│   ├── manager/            # Manager-only screens (planning, hubspot, users)
+│   ├── admin/              # Admin-only settings
 │   ├── api/                # API routes
-│   ├── invite/[token]/     # Invite acceptance
 │   └── login/              # Auth screens
 ├── components/layout/      # AppShell sidebar
 ├── lib/
 │   ├── auth.ts             # NextAuth config
 │   ├── db.ts               # Prisma singleton
-│   ├── ai.ts               # OpenAI / Anthropic calls
-│   ├── hubspot.ts          # HubSpot mock/real
+│   ├── hubspot.ts          # HubSpot mock/real sync
 │   └── icp-score.ts        # ICP scoring logic
 ├── prisma/
-│   ├── schema.prisma       # DB schema
-│   └── seed.ts             # Seed 50 conferences + admin
-├── Dockerfile              # Multi-stage build
-├── docker-compose.yml
-└── .env.example
+│   ├── schema.prisma       # DB schema (SQLite)
+│   └── seed.ts             # Demo data seed
+├── Dockerfile              # 4-stage build: deps → builder → seeder → runner
+├── docker-compose.yml      # Local Docker run (uses .env.docker)
+├── docker-entrypoint.sh    # Copies seeded DB on first start, launches server
+├── .env.docker.example     # Template for Docker env vars
+└── .env.example            # Template for local dev env vars
 ```
 
 ---
 
 ## Development Notes
 
+- **Tests:** `npm test` — 430 tests, Vitest + Testing Library
 - **Invite API:** `POST /api/invitations` — manager+ only
 - **Signup:** `POST /api/auth/signup` — validates invite token
-- **Conference discovery:** `POST /api/conferences/discover` — fetches 3 public fintech sites, passes to AI
+- **Conference discovery:** `POST /api/conferences/discover` — AI-powered
 - **Trips:** `POST /api/trips` with `action: recalculate` or `action: assign`
 
-Built with ❤️ for Grain Finance's sales team.
+Built for Grain Finance's sales team.

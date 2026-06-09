@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { firstName, lastName, email, phone, company, jobTitle, linkedinUrl, notes, rawCardText, conferenceId, mergeLeadId } = body
+  const { firstName, lastName, email, phone, company, jobTitle, linkedinUrl, notes, rawCardText, conferenceId, mergeLeadId, preservePreviousEmployment } = body
 
   if (!firstName || !lastName || !company) {
     return NextResponse.json({ error: 'firstName, lastName, company required' }, { status: 400 })
@@ -42,14 +42,46 @@ export async function POST(req: NextRequest) {
   let lead: any
 
   if (mergeLeadId) {
-    lead = await db.lead.findUnique({ where: { id: mergeLeadId } })
-    if (conferenceId && lead) {
+    const existing = await db.lead.findUnique({ where: { id: mergeLeadId } })
+    if (!existing) return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+
+    const updateData: Record<string, unknown> = {}
+
+    // Fill blank contact fields from the new form data
+    if (email && !existing.email) updateData.email = email
+    if (phone && !existing.phone) updateData.phone = phone
+    if (linkedinUrl && !existing.linkedinUrl) updateData.linkedinUrl = linkedinUrl
+
+    // Profile update: preserve old company/role, replace with new values
+    if (preservePreviousEmployment) {
+      const newCo  = (company  || '').toLowerCase().trim()
+      const oldCo  = (existing.company  || '').toLowerCase().trim()
+      const newJT  = (jobTitle || '').toLowerCase().trim()
+      const oldJT  = (existing.jobTitle || '').toLowerCase().trim()
+      if (newCo !== oldCo || newJT !== oldJT) {
+        updateData.previousCompany  = existing.company
+        updateData.previousJobTitle = existing.jobTitle
+        if (company)  updateData.company  = company
+        if (jobTitle) updateData.jobTitle = jobTitle
+      }
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await db.lead.update({ where: { id: mergeLeadId }, data: updateData })
+    }
+
+    const effectiveCompany  = (updateData.company  as string) ?? existing.company
+    const effectiveJobTitle = (updateData.jobTitle as string) ?? existing.jobTitle
+
+    if (conferenceId) {
       await db.conferenceLead.upsert({
         where: { conferenceId_leadId: { conferenceId, leadId: mergeLeadId } },
-        update: { engagementNotes: notes },
-        create: { conferenceId, leadId: mergeLeadId, engagementNotes: notes },
+        update: { engagementNotes: notes, companyAtTime: effectiveCompany, jobTitleAtTime: effectiveJobTitle },
+        create: { conferenceId, leadId: mergeLeadId, engagementNotes: notes, companyAtTime: effectiveCompany, jobTitleAtTime: effectiveJobTitle },
       })
     }
+
+    lead = { ...existing, ...updateData }
   } else {
     lead = await db.lead.create({
       data: {
