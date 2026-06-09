@@ -66,6 +66,18 @@ export async function POST(req: NextRequest) {
       }).catch(() => {})
     }
 
+    // Link any matching PersonEnrichment record that was pre-generated but not yet tied to a lead
+    if (jobTitle) {
+      await db.personEnrichment.updateMany({
+        where: {
+          company:      company.toLowerCase().trim(),
+          jobTitle:     jobTitle.toLowerCase().trim(),
+          matchedLeadId: null,
+        },
+        data: { matchedLeadId: lead.id },
+      }).catch(() => {})
+    }
+
     // Async HubSpot sync
     syncLeadToHubspot(lead).catch(console.error)
   }

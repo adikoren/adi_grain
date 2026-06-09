@@ -8,6 +8,7 @@ interface ContactPayload {
   phone?: string | null
   company: string
   jobTitle?: string | null
+  linkedinUrl?: string | null
 }
 
 // Returns the mode from SystemConfig
@@ -53,12 +54,13 @@ async function realCreateContact(lead: ContactPayload, apiKey: string): Promise<
     },
     body: JSON.stringify({
       properties: {
-        email: lead.email,
+        email:     lead.email,
         firstname: lead.firstName,
-        lastname: lead.lastName,
-        phone: lead.phone,
-        company: lead.company,
-        jobtitle: lead.jobTitle,
+        lastname:  lead.lastName,
+        phone:     lead.phone,
+        company:   lead.company,
+        jobtitle:  lead.jobTitle,
+        ...(lead.linkedinUrl ? { linkedin: lead.linkedinUrl } : {}),
       },
     }),
   })

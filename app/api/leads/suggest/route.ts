@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { company, jobTitle, conferenceId, conferenceName, website } = await req.json()
+  const { company, jobTitle, conferenceId, conferenceName, website, targetId } = await req.json()
   const key = company.toLowerCase().trim()
 
   // ── Check DB cache first ──────────────────────────────────────────────────
@@ -165,6 +165,25 @@ Generate a Company Brief for a Grain sales rep.`
         lastEnrichedAt: new Date(),
       },
     })
+
+    // ── Sync non-empty brief fields back to TargetAccount (only fills empty fields) ─
+    if (targetId) {
+      try {
+        const target = await db.targetAccount.findUnique({
+          where: { id: targetId },
+          select: { description: true, industry: true, relevanceReason: true },
+        })
+        if (target) {
+          const patch: Record<string, string> = {}
+          if (!target.description    && suggestions.whatTheyDo)     patch.description     = suggestions.whatTheyDo
+          if (!target.industry       && suggestions.market)          patch.industry        = suggestions.market
+          if (!target.relevanceReason && suggestions.grainRelevance) patch.relevanceReason = suggestions.grainRelevance
+          if (Object.keys(patch).length > 0) {
+            await db.targetAccount.update({ where: { id: targetId }, data: patch })
+          }
+        }
+      } catch { /* non-critical — don't fail the whole request */ }
+    }
 
     return NextResponse.json({ suggestions, source: 'ai' })
   } catch (err) {

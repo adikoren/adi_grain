@@ -12,6 +12,9 @@ const mockDb = vi.hoisted(() => ({
     create: vi.fn(),
     upsert: vi.fn(),
   },
+  personEnrichment: {
+    updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
 }))
 
 const mockSession = vi.hoisted(() => ({ fn: vi.fn() }))

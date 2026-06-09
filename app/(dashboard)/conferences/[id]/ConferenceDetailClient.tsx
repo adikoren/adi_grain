@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { scoreIcpBadge, scoreBreakdown } from '@/lib/icp-score'
@@ -482,7 +482,7 @@ function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager,
                   {t.description && <p className="text-xs text-content-muted mt-0.5 italic">{t.description}</p>}
                   {t.notes && !t.description && <p className="text-xs text-content-muted mt-0.5 italic">{t.notes}</p>}
                   <div className="mt-1.5">
-                    <CompanyBriefPanel company={t.company} website={t.website} contactRole={t.contactRole} conferenceName={conferenceName} />
+                    <CompanyBriefPanel company={t.company} website={t.website} contactRole={t.contactRole} conferenceName={conferenceName} targetId={t.id} />
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -939,14 +939,22 @@ const BRIEF_FIELDS: { key: keyof CompanyBrief; label: string; icon: string }[] =
   { key: 'salesAngle',     label: 'Sales angle',      icon: '🎯' },
 ]
 
-function CompanyBriefPanel({ company, website, contactRole, conferenceName, indent = false }: {
+function CompanyBriefPanel({ company, website, contactRole, conferenceName, targetId, indent = false }: {
   company: string; website?: string | null; contactRole?: string | null
-  conferenceName: string; indent?: boolean
+  conferenceName: string; targetId?: string; indent?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [brief, setBrief] = useState<CompanyBrief | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<'no_key' | 'ai_error' | null>(null)
+
+  // Auto-load cached brief from DB on mount — no click required
+  useEffect(() => {
+    fetch(`/api/enrichment/company?company=${encodeURIComponent(company)}`)
+      .then(r => r.json())
+      .then(({ enrichment }) => { if (enrichment) setBrief(enrichment as CompanyBrief) })
+      .catch(() => {})
+  }, [company])
 
   async function fetchBrief() {
     setLoading(true)
@@ -955,7 +963,7 @@ function CompanyBriefPanel({ company, website, contactRole, conferenceName, inde
       const res = await fetch('/api/leads/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company, jobTitle: contactRole || '', conferenceName, website }),
+        body: JSON.stringify({ company, jobTitle: contactRole || '', conferenceName, website, targetId }),
       })
       const data = await res.json()
       if (data.suggestions) {
@@ -978,9 +986,13 @@ function CompanyBriefPanel({ company, website, contactRole, conferenceName, inde
           if (!open && !brief && !loading) fetchBrief()
           setOpen(v => !v)
         }}
-        className="text-[11px] font-medium px-2.5 py-1 rounded border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10 transition-colors"
+        className={`text-[11px] font-medium px-2.5 py-1 rounded border transition-colors ${
+          brief
+            ? 'border-emerald-400/50 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50'
+            : 'border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10'
+        }`}
       >
-        {loading ? '…' : open ? '▲ Company Brief' : '📋 Company Brief'}
+        {loading ? '…' : open ? '▲ Company Brief' : brief ? '📋 Brief ✓' : '📋 Company Brief'}
       </button>
 
       {open && (
@@ -1029,7 +1041,7 @@ function CompanyCard({ t, conferenceId, conferenceName }: {
         </div>
         <span className="text-sm font-semibold text-content-primary">{t.company}</span>
         <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
-        <CompanyBriefPanel company={t.company} website={t.website} contactRole={t.contactRole} conferenceName={conferenceName} />
+        <CompanyBriefPanel company={t.company} website={t.website} contactRole={t.contactRole} conferenceName={conferenceName} targetId={t.id} />
         <Link
           href={captureUrl(t.company, '')}
           className="ml-auto text-[11px] font-medium px-2.5 py-1 rounded-full border border-brand-navy/30 bg-brand-navy/5 text-brand-navy hover:bg-brand-navy/10 transition-colors flex-shrink-0"
