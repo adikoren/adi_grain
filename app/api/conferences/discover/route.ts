@@ -5,9 +5,15 @@ import { discoverConferences } from '@/lib/ai'
 import { db } from '@/lib/db'
 
 const SOURCES = [
+  // Fintech / payments focused
   'https://www.fintechweekly.com/fintech-conferences/',
   'https://fintechlabs.com/the-biggest-payments-events-conferences-trade-shows-of-the-year/',
   'https://paytech.events/events/',
+  // FX / treasury / institutional
+  'https://www.euromoney.com/events',
+  'https://www.finextra.com/events',
+  // Broader payments & cards
+  'https://www.paymentscardsandmobile.com/events/',
 ]
 
 export async function POST(req: NextRequest) {
@@ -26,11 +32,11 @@ export async function POST(req: NextRequest) {
     try {
       const res = await fetch(url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GrainBot/1.0)' },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(10000),
       })
       if (!res.ok) continue
       const html = await res.text()
-      const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 12000)
+      const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 15000)
 
       const discovered = await discoverConferences(text)
       for (const c of discovered) {
@@ -44,5 +50,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ conferences: results.slice(0, 30) })
+  return NextResponse.json({ conferences: results.slice(0, 50) })
 }
