@@ -52,6 +52,55 @@ export default function ConferencesClient({
 }) {
   const mySet = new Set(myConferenceIds)
   const [search, setSearch]           = useState('')
+
+  // Extract companies from URL
+  const [extractConf,    setExtractConf]    = useState<{id: string; name: string} | null>(null)
+  const [extractUrl,     setExtractUrl]     = useState('')
+  const [extractLoading, setExtractLoading] = useState(false)
+  const [extractResults, setExtractResults] = useState<Array<{
+    name: string; website: string | null; contactName: string | null
+    contactRole: string | null; priority: string; companyType: string | null; source: string
+  }> | null>(null)
+  const [extractError,   setExtractError]   = useState<string | null>(null)
+  const [addingKeys,     setAddingKeys]     = useState<Set<string>>(new Set())
+  const [addedKeys,      setAddedKeys]      = useState<Set<string>>(new Set())
+
+  function openExtract(conf: {id: string; name: string}) {
+    setExtractConf(conf)
+    setExtractUrl(''); setExtractResults(null); setExtractError(null)
+    setAddingKeys(new Set()); setAddedKeys(new Set())
+  }
+
+  async function runExtract() {
+    if (!extractConf || !extractUrl.trim()) return
+    setExtractLoading(true); setExtractError(null); setExtractResults(null)
+    try {
+      const res = await fetch(`/api/conferences/${extractConf.id}/extract-companies`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: extractUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) setExtractError(data.error || 'Failed to extract')
+      else setExtractResults(data.companies || [])
+    } catch { setExtractError('Network error') }
+    finally { setExtractLoading(false) }
+  }
+
+  async function addTarget(c: NonNullable<typeof extractResults>[0]) {
+    if (!extractConf) return
+    setAddingKeys(prev => { const s = new Set(Array.from(prev)); s.add(c.name); return s })
+    await fetch(`/api/conferences/${extractConf.id}/targets`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        company: c.name, contactName: c.contactName || undefined,
+        contactRole: c.contactRole || undefined,
+        notes: `Source: ${c.source}${c.companyType ? ` · ${c.companyType}` : ''}`,
+        priority: c.priority || 'MEDIUM',
+      }),
+    })
+    setAddingKeys(prev => { const s = new Set(Array.from(prev)); s.delete(c.name); return s })
+    setAddedKeys(prev => { const s = new Set(Array.from(prev)); s.add(c.name); return s })
+  }
   const [region, setRegion]           = useState('')
   const [vertical, setVertical]       = useState('')
   const [persona, setPersona]         = useState('')
@@ -219,6 +268,12 @@ export default function ConferencesClient({
                     {c.attendingStatus === 'ATTENDING' ? '✓ Going' : c.attendingStatus === 'EVALUATING' ? 'Evaluating' : 'Not going'}
                   </span>
                   {isManager && (
+                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); openExtract({id: c.id, name: c.name}) }}
+                      className="text-xs text-brand-accent hover:text-brand-navy px-1.5 py-0.5 rounded hover:bg-surface-raised transition-colors font-medium">
+                      ✦ Extract
+                    </button>
+                  )}
+                  {isManager && (
                     <Link href={`/manager/conferences/${c.id}/edit`} onClick={e => e.stopPropagation()}
                       className="text-xs text-content-muted hover:text-brand-navy px-1.5 py-0.5 rounded hover:bg-surface-raised transition-colors">
                       Edit
@@ -236,6 +291,93 @@ export default function ConferencesClient({
           <p className="text-3xl mb-3">📅</p>
           <p>No upcoming conferences match your filters.</p>
           {activeCount > 0 && <button onClick={clear} className="mt-2 text-sm text-brand-accent hover:underline">Clear all filters</button>}
+        </div>
+      )}
+
+      {/* Extract Companies modal */}
+      {extractConf && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
+              <div>
+                <h2 className="text-base font-semibold text-content-primary">Extract Target Companies</h2>
+                <p className="text-xs text-content-muted mt-0.5">{extractConf.name}</p>
+              </div>
+              <button onClick={() => setExtractConf(null)} className="text-content-muted hover:text-content-primary text-xl leading-none">×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+              <p className="text-xs text-content-muted">
+                Paste a sponsors, exhibitors, speakers, or agenda URL. AI will identify companies relevant to Grain and score them by ICP priority.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="https://conference.com/sponsors"
+                  value={extractUrl}
+                  onChange={e => setExtractUrl(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && runExtract()}
+                  autoFocus
+                />
+                <button onClick={runExtract} disabled={extractLoading || !extractUrl.trim()} className="btn-primary text-sm px-4 min-w-[80px]">
+                  {extractLoading ? '…' : 'Extract'}
+                </button>
+              </div>
+              {extractLoading && (
+                <div className="flex items-center gap-2 text-sm text-content-muted py-4 justify-center">
+                  <span className="animate-spin w-4 h-4 border-2 border-brand-navy border-t-transparent rounded-full" />
+                  Scanning page with AI…
+                </div>
+              )}
+              {extractError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{extractError}</div>
+              )}
+              {extractResults && extractResults.length === 0 && (
+                <p className="text-sm text-content-muted text-center py-6">No relevant companies found. Try a sponsors, exhibitors, or speakers page URL.</p>
+              )}
+              {extractResults && extractResults.map(c => {
+                const isAdding = addingKeys.has(c.name)
+                const isAdded  = addedKeys.has(c.name)
+                return (
+                  <div key={c.name} className="flex items-start gap-3 p-3 rounded-xl border border-surface-border hover:bg-surface-raised/30 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm text-content-primary">{c.name}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                          c.priority === 'HIGH'   ? 'bg-red-100 text-red-700' :
+                          c.priority === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
+                                                    'bg-slate-100 text-slate-600'
+                        }`}>{c.priority}</span>
+                        {c.companyType && <span className="text-xs text-content-muted">{c.companyType}</span>}
+                        <span className="text-[10px] text-content-muted/60 capitalize">{c.source}</span>
+                      </div>
+                      {(c.contactName || c.contactRole) && (
+                        <p className="text-xs text-content-muted mt-0.5">{c.contactName}{c.contactRole ? ` · ${c.contactRole}` : ''}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => addTarget(c)}
+                      disabled={isAdding || isAdded}
+                      className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                        isAdded   ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-default' :
+                        isAdding  ? 'bg-surface-raised text-content-muted cursor-wait' :
+                                    'bg-brand-navy text-white hover:bg-brand-navy/90'
+                      }`}
+                    >
+                      {isAdded ? '✓ Added' : isAdding ? '…' : '+ Add'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+            {extractResults && extractResults.length > 0 && (
+              <div className="px-6 py-3 border-t border-surface-border flex items-center justify-between">
+                <span className="text-xs text-content-muted">{extractResults.length} companies found · {addedKeys.size} added</span>
+                <Link href={`/conferences/${extractConf.id}`} className="text-xs text-brand-accent hover:underline">
+                  View conference planning →
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
