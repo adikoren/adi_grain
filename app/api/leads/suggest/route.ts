@@ -14,7 +14,6 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
     clearTimeout(timer)
     if (!res.ok) return null
     const html = await res.text()
-    // Strip scripts, styles, and tags; collapse whitespace
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -44,41 +43,46 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ suggestions: null, reason: 'no_key' })
   }
 
-  // Fetch company website in parallel with DB call (already done above)
+  // Fetch company website in parallel with building the prompt
   const websiteText = website ? await fetchWebsiteText(website) : null
 
   const confContext = conferenceName ? ` attending ${conferenceName}` : conferenceId ? ' at an industry conference' : ''
 
-  const systemPrompt = `You are a sales intelligence assistant at Grain, a fintech company providing FX (foreign exchange) hedging and risk management for businesses. Grain serves PSPs, payment providers, travel companies, and any businesses with FX exposure.
+  const systemPrompt = `You are a sales intelligence assistant at Grain, a fintech company providing FX (foreign exchange) hedging and risk management for businesses. Grain serves PSPs, payment providers, travel companies, and any business with FX exposure.
 
-When asked about a person's role at a company, provide:
-1. Brief company context relevant to FX/payments (1-2 sentences)
-2. Why this role/company matters for Grain specifically (1-2 sentences)
-3. A suggested conversation or follow-up angle (1-2 sentences)
-4. A suggested person: if you know from your training data who holds (or recently held) this role at this company, return their name. Only give a real name you are confident about — do NOT fabricate. If uncertain, return null for firstName/lastName.
+Your job is to produce a concise, practical company brief for a Grain sales rep before or during a meeting.
 
-Return your response as JSON only — no prose, no code fences, just the object:
+Return ONLY a JSON object — no code fences, no prose before or after. Use this exact schema:
 {
-  "context": "...",
-  "icpRelevance": "...",
-  "followUpAngle": "...",
+  "whatTheyDo": "One sentence: what the company does",
+  "grainRelevance": "Why this company is relevant to Grain (FX exposure, payments volume, etc.)",
+  "market": "Primary market / industry vertical",
+  "businessType": "B2B, B2C, or B2B2C",
+  "fxRelevance": "Specific FX or multi-currency exposure at this company",
+  "keyPeople": "Roles or names to approach (e.g. CFO, Head of Treasury, VP Payments)",
+  "salesAngle": "One concrete opening line or angle for a Grain sales conversation",
   "suggestedPerson": {
     "firstName": null,
     "lastName": null,
     "confidence": "high|medium|low",
-    "reasoning": "one sentence why you think this is them",
+    "reasoning": "Why you think this person holds the role",
     "linkedinHint": null
   }
-}`
+}
+
+Rules:
+- Keep every field to 1-2 short sentences maximum
+- suggestedPerson.firstName/lastName: only provide if you are confident from training data — otherwise null
+- Do NOT add any text outside the JSON object`
 
   const websiteSection = websiteText
     ? `\n\nCompany website content (use this for accurate context):\n${websiteText}`
     : ''
 
   const prompt = `Company: ${company}
-Role: ${jobTitle || 'Unknown'}${confContext}${websiteSection}
+Role to meet: ${jobTitle || 'Unknown'}${confContext}${websiteSection}
 
-Provide brief, actionable intelligence for a Grain sales rep meeting this person, and suggest who this person might be.`
+Generate a Company Brief for a Grain sales rep.`
 
   try {
     let raw: string
@@ -93,7 +97,7 @@ Provide brief, actionable intelligence for a Grain sales rep meeting this person
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 512,
+          max_tokens: 600,
           system: systemPrompt,
           messages: [{ role: 'user', content: prompt }],
         }),
@@ -115,7 +119,7 @@ Provide brief, actionable intelligence for a Grain sales rep meeting this person
             { role: 'system', content: systemPrompt },
             { role: 'user', content: prompt },
           ],
-          max_tokens: 512,
+          max_tokens: 600,
         }),
       })
       const data = await res.json()
@@ -123,7 +127,7 @@ Provide brief, actionable intelligence for a Grain sales rep meeting this person
       raw = data.choices[0].message.content
     }
 
-    // Extract the JSON object — AI sometimes appends extra text after the closing fence
+    // Extract the JSON object — guard against any trailing prose
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON object in AI response')
     const suggestions = JSON.parse(jsonMatch[0])

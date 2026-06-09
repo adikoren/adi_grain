@@ -302,7 +302,7 @@ export default function ConferenceDetailClient({
       {tab === 'planning' && (
         <div className="grid lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-5">
-            <TargetAccountsPanel conferenceId={conference.id} targets={conference.targetAccounts} isManager={isManager} onRefresh={() => router.refresh()} />
+            <TargetAccountsPanel conferenceId={conference.id} conferenceName={conference.name} targets={conference.targetAccounts} isManager={isManager} onRefresh={() => router.refresh()} />
             {!isManager && conference.targetAccounts.length > 0 && (
               <SuggestedLeadsPanel
                 targets={conference.targetAccounts}
@@ -348,8 +348,8 @@ const ICP_FIT_COLORS: Record<string, string> = {
 }
 
 // ── Target Accounts Panel ─────────────────────────────────────────────────────
-function TargetAccountsPanel({ conferenceId, targets, isManager, onRefresh }: {
-  conferenceId: string; targets: TargetAccount[]; isManager: boolean; onRefresh: () => void
+function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager, onRefresh }: {
+  conferenceId: string; conferenceName: string; targets: TargetAccount[]; isManager: boolean; onRefresh: () => void
 }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm]     = useState({ company: '', contactName: '', contactRole: '', notes: '', priority: 'MEDIUM' })
@@ -481,6 +481,9 @@ function TargetAccountsPanel({ conferenceId, targets, isManager, onRefresh }: {
                   )}
                   {t.description && <p className="text-xs text-content-muted mt-0.5 italic">{t.description}</p>}
                   {t.notes && !t.description && <p className="text-xs text-content-muted mt-0.5 italic">{t.notes}</p>}
+                  <div className="mt-1.5">
+                    <CompanyBriefPanel company={t.company} website={t.website} contactRole={t.contactRole} conferenceName={conferenceName} />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <select
@@ -920,50 +923,102 @@ const SUGGESTED_ROLES = [
   'Head of Treasury', 'Partnerships Manager', 'Product Lead',
 ]
 
-interface CompanyIntel { context: string; icpRelevance: string; followUpAngle: string }
+// ── Shared Company Brief Panel ────────────────────────────────────────────────
+interface CompanyBrief {
+  whatTheyDo: string; grainRelevance: string; market: string
+  businessType: string; fxRelevance: string; keyPeople: string; salesAngle: string
+}
 
-function CompanyCard({ t, conferenceId, conferenceName }: {
-  t: TargetAccount; conferenceId: string; conferenceName: string
+const BRIEF_FIELDS: { key: keyof CompanyBrief; label: string; icon: string }[] = [
+  { key: 'whatTheyDo',     label: 'What they do',    icon: '🏢' },
+  { key: 'grainRelevance', label: 'Why Grain?',       icon: '💡' },
+  { key: 'market',         label: 'Market',           icon: '🌍' },
+  { key: 'businessType',   label: 'B2B / B2C',        icon: '🔗' },
+  { key: 'fxRelevance',    label: 'FX relevance',     icon: '💱' },
+  { key: 'keyPeople',      label: 'Key people',       icon: '👤' },
+  { key: 'salesAngle',     label: 'Sales angle',      icon: '🎯' },
+]
+
+function CompanyBriefPanel({ company, website, contactRole, conferenceName, indent = false }: {
+  company: string; website?: string | null; contactRole?: string | null
+  conferenceName: string; indent?: boolean
 }) {
-  const [intelOpen, setIntelOpen] = useState(false)
-  const [intel, setIntel] = useState<CompanyIntel | null>(null)
-  const [loadingIntel, setLoadingIntel] = useState(false)
-  const [intelError, setIntelError] = useState<'no_key' | 'ai_error' | null>(null)
+  const [open, setOpen] = useState(false)
+  const [brief, setBrief] = useState<CompanyBrief | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<'no_key' | 'ai_error' | null>(null)
 
-  const hasStoredIntel = !!(t.description || t.relevanceReason)
-
-  function captureUrl(company: string, jobTitle: string) {
-    const p = new URLSearchParams({ company, jobTitle, conferenceId, conferenceName })
-    return `/capture?${p.toString()}`
-  }
-
-  async function fetchIntel() {
-    setLoadingIntel(true)
-    setIntelError(null)
+  async function fetchBrief() {
+    setLoading(true)
+    setError(null)
     try {
       const res = await fetch('/api/leads/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company: t.company, jobTitle: t.contactRole || '', conferenceName, website: t.website }),
+        body: JSON.stringify({ company, jobTitle: contactRole || '', conferenceName, website }),
       })
       const data = await res.json()
       if (data.suggestions) {
-        setIntel(data.suggestions)
+        setBrief(data.suggestions as CompanyBrief)
       } else {
-        setIntelError(data.reason === 'no_key' ? 'no_key' : 'ai_error')
+        setError(data.reason === 'no_key' ? 'no_key' : 'ai_error')
       }
     } catch {
-      setIntelError('ai_error')
+      setError('ai_error')
     } finally {
-      setLoadingIntel(false)
+      setLoading(false)
     }
   }
 
-  const shownIntel: CompanyIntel | null = intel || (hasStoredIntel ? {
-    context: t.description || '',
-    icpRelevance: t.relevanceReason || '',
-    followUpAngle: '',
-  } : null)
+  return (
+    <div className={indent ? 'ml-0' : ''}>
+      <button
+        type="button"
+        onClick={() => {
+          if (!open && !brief && !loading) fetchBrief()
+          setOpen(v => !v)
+        }}
+        className="text-[11px] font-medium px-2.5 py-1 rounded border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10 transition-colors"
+      >
+        {loading ? '…' : open ? '▲ Company Brief' : '📋 Company Brief'}
+      </button>
+
+      {open && (
+        <div className="mt-2 rounded-xl border border-brand-accent/20 bg-white p-3 space-y-1.5">
+          {loading && (
+            <div className="flex items-center gap-2 py-1 text-xs text-content-muted">
+              <div className="w-3 h-3 border border-brand-accent border-t-transparent rounded-full animate-spin" />
+              Building company brief…
+            </div>
+          )}
+          {!loading && brief && BRIEF_FIELDS.map(({ key, label, icon }) =>
+            brief[key] ? (
+              <div key={key} className="flex gap-2 text-xs">
+                <span className="flex-shrink-0 w-4 text-center">{icon}</span>
+                <span className="text-content-muted font-medium w-24 flex-shrink-0">{label}</span>
+                <span className="text-content-primary leading-relaxed">{brief[key]}</span>
+              </div>
+            ) : null
+          )}
+          {!loading && !brief && error === 'no_key' && (
+            <p className="text-xs text-amber-700">AI not configured. Ask your admin to add an API key in Settings.</p>
+          )}
+          {!loading && !brief && error === 'ai_error' && (
+            <p className="text-xs text-content-muted">Could not load brief. <button type="button" className="underline" onClick={fetchBrief}>Try again</button></p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CompanyCard({ t, conferenceId, conferenceName }: {
+  t: TargetAccount; conferenceId: string; conferenceName: string
+}) {
+  function captureUrl(company: string, jobTitle: string) {
+    const p = new URLSearchParams({ company, jobTitle, conferenceId, conferenceName })
+    return `/capture?${p.toString()}`
+  }
 
   return (
     <div className="space-y-2">
@@ -974,17 +1029,7 @@ function CompanyCard({ t, conferenceId, conferenceName }: {
         </div>
         <span className="text-sm font-semibold text-content-primary">{t.company}</span>
         <span className={`badge text-xs ${PRIORITY_COLORS[t.priority]}`}>{t.priority}</span>
-        {/* Intel toggle */}
-        <button
-          type="button"
-          onClick={() => {
-            if (!intelOpen && !shownIntel && !loadingIntel) fetchIntel()
-            setIntelOpen(v => !v)
-          }}
-          className="text-[11px] font-medium px-2 py-0.5 rounded border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10 transition-colors"
-        >
-          {loadingIntel ? '…' : intelOpen ? '▲ Intel' : '✨ Intel'}
-        </button>
+        <CompanyBriefPanel company={t.company} website={t.website} contactRole={t.contactRole} conferenceName={conferenceName} />
         <Link
           href={captureUrl(t.company, '')}
           className="ml-auto text-[11px] font-medium px-2.5 py-1 rounded-full border border-brand-navy/30 bg-brand-navy/5 text-brand-navy hover:bg-brand-navy/10 transition-colors flex-shrink-0"
@@ -992,44 +1037,6 @@ function CompanyCard({ t, conferenceId, conferenceName }: {
           Add Lead →
         </Link>
       </div>
-
-      {/* Intel panel */}
-      {intelOpen && (
-        <div className="ml-8 rounded-xl border border-brand-accent/25 bg-brand-accent/5 p-3 space-y-2">
-          {loadingIntel && <p className="text-xs text-content-muted">Getting company intelligence…</p>}
-          {!loadingIntel && shownIntel && (
-            <>
-              {shownIntel.context && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Company Context</p>
-                  <p className="text-xs text-content-secondary leading-relaxed">{shownIntel.context}</p>
-                </div>
-              )}
-              {shownIntel.icpRelevance && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Why They Matter</p>
-                  <p className="text-xs text-content-secondary leading-relaxed">{shownIntel.icpRelevance}</p>
-                </div>
-              )}
-              {shownIntel.followUpAngle && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-content-muted mb-0.5">Follow-up Angle</p>
-                  <p className="text-xs text-content-secondary leading-relaxed">{shownIntel.followUpAngle}</p>
-                </div>
-              )}
-            </>
-          )}
-          {!loadingIntel && !shownIntel && intelError === 'no_key' && (
-            <p className="text-xs text-amber-700">AI not configured. Ask your admin to add an API key in Settings.</p>
-          )}
-          {!loadingIntel && !shownIntel && intelError === 'ai_error' && (
-            <p className="text-xs text-content-muted">Could not load intelligence. <button type="button" className="underline" onClick={fetchIntel}>Try again</button></p>
-          )}
-          {!loadingIntel && !shownIntel && !intelError && (
-            <p className="text-xs text-content-muted">No intelligence available. <button type="button" className="underline" onClick={fetchIntel}>Try again</button></p>
-          )}
-        </div>
-      )}
 
       {/* Known contact as primary chip */}
       {t.contactName && t.contactRole && (
@@ -1073,7 +1080,7 @@ function SuggestedLeadsPanel({ targets, conferenceId, conferenceName }: {
     <div className="card space-y-4">
       <div>
         <h3 className="font-semibold text-sm text-content-primary">Suggested Leads</h3>
-        <p className="text-xs text-content-muted mt-0.5">Click a role chip to open Add Lead pre-filled. Use ✨ Intel for company context before approaching.</p>
+        <p className="text-xs text-content-muted mt-0.5">Click a role chip to open Add Lead pre-filled. Use 📋 Company Brief for a quick sales primer.</p>
       </div>
       <div className="space-y-4">
         {sorted.map(t => (
