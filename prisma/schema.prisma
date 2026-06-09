@@ -79,7 +79,7 @@ model Invitation {
 
 model SystemConfig {
   id            String   @id @default("singleton")
-  aiProvider    String   @default("OPENAI")
+  aiProvider    String   @default("ANTHROPIC")
   aiApiKey      String?
   hubspotMode   String   @default("MOCK")
   hubspotApiKey String?

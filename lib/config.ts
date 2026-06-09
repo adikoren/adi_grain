@@ -15,7 +15,7 @@ function fromEnv(): Partial<SystemConfig> {
   const serperKey    = process.env.SERPER_API_KEY     || null
 
   return {
-    aiProvider:    anthropicKey ? 'ANTHROPIC' : 'OPENAI',
+    aiProvider:    openaiKey && !anthropicKey ? 'OPENAI' : 'ANTHROPIC',
     aiApiKey:      anthropicKey || openaiKey  || null,
     hubspotMode:   hubspotKey   ? 'REAL'      : 'MOCK',
     hubspotApiKey: hubspotKey,
@@ -31,7 +31,7 @@ export async function getConfig(): Promise<SystemConfig> {
     cfg = await db.systemConfig.create({
       data: {
         id:            'singleton',
-        aiProvider:    env.aiProvider    ?? 'OPENAI',
+        aiProvider:    env.aiProvider    ?? 'ANTHROPIC',
         aiApiKey:      env.aiApiKey      ?? null,
         hubspotMode:   env.hubspotMode   ?? 'MOCK',
         hubspotApiKey: env.hubspotApiKey ?? null,
