@@ -28,7 +28,7 @@ export default async function DashboardPage() {
   if (isManager) {
     const [upcomingConferences, repsWithAssignments, syncedCount, needsReviewCount, readyCount, failedCount] = await Promise.all([
       db.conference.findMany({
-        where: { endDate: { gte: now } },
+        where: { endDate: { gte: now }, isHidden: false },
         include: {
           assignments: { select: { userId: true, role: true, user: { select: { id: true, name: true } } } },
           _count: { select: { leads: true, targetAccounts: true } },

@@ -8,7 +8,7 @@ export default async function ArchivePage() {
   const isManager = session?.user?.role === 'MANAGER' || session?.user?.role === 'ADMIN'
 
   const conferences = await db.conference.findMany({
-    where: { endDate: { lt: new Date() } },
+    where: { endDate: { lt: new Date() }, isHidden: false },
     orderBy: { startDate: 'desc' },
     include: {
       assignments: { include: { user: { select: { id: true, name: true } } } },

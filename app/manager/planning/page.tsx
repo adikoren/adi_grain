@@ -10,7 +10,7 @@ export default async function PlanningPage() {
   const now = new Date()
   const [conferences, users, assignments] = await Promise.all([
     db.conference.findMany({
-      where: { endDate: { gte: now } },
+      where: { endDate: { gte: now }, isHidden: false },
       include: { _count: { select: { leads: true, targetAccounts: true } } },
       orderBy: { startDate: 'asc' },
     }),

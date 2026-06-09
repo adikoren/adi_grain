@@ -109,6 +109,8 @@ model Conference {
   updatedAt         DateTime @updatedAt
 
   // Planning fields
+  isHidden          Boolean  @default(false)
+
   attendingStatus   String   @default("EVALUATING")
   campaignStatus    String   @default("NOT_STARTED")
   outboundStatus    String   @default("NOT_STARTED")

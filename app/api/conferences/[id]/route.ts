@@ -19,7 +19,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const body = await req.json()
-  const { name, website, startDate, endDate, city, country, verticals, buyerPersonas, estimatedAudience, notes, status, icpScore } = body
+  const { name, website, startDate, endDate, city, country, verticals, buyerPersonas, estimatedAudience, notes, status, icpScore, isHidden } = body
+
+  // Allow a simple hide/unhide without touching other fields
+  if (isHidden !== undefined && Object.keys(body).length === 1) {
+    const conference = await db.conference.update({ where: { id: params.id }, data: { isHidden } })
+    return NextResponse.json({ conference })
+  }
 
   const verts = Array.isArray(verticals) ? verticals : JSON.parse(verticals || '[]')
   const personas = Array.isArray(buyerPersonas) ? buyerPersonas : JSON.parse(buyerPersonas || '[]')
@@ -66,7 +72,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!session || !['ADMIN', 'MANAGER'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
   await db.conference.delete({ where: { id: params.id } })

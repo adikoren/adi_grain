@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
-  const existing = await db.conference.findMany({ select: { name: true } })
+  // Exclude hidden conferences so they can resurface in discovery
+  const existing = await db.conference.findMany({ where: { isHidden: false }, select: { name: true } })
   const existingNames = new Set(existing.map(c => c.name.toLowerCase()))
 
   const results: any[] = []

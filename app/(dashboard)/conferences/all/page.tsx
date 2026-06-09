@@ -9,7 +9,7 @@ export default async function AllConferencesPage() {
 
   const [conferences, myAssignments, reps] = await Promise.all([
     db.conference.findMany({
-      where: { endDate: { gte: new Date() } },
+      where: { endDate: { gte: new Date() }, isHidden: false },
       orderBy: { startDate: 'asc' },
       include: {
         assignments: { include: { user: { select: { id: true, name: true } } } },

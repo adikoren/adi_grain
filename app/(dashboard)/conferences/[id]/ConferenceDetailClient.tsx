@@ -80,6 +80,26 @@ export default function ConferenceDetailClient({
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<'overview' | 'planning' | 'leads' | 'hubspot'>('overview')
+  const [actionPending, setActionPending] = useState<'hide' | 'delete' | null>(null)
+
+  async function hideConference() {
+    setActionPending('hide')
+    await fetch(`/api/conferences/${conference.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isHidden: true }),
+    })
+    router.push('/conferences')
+    router.refresh()
+  }
+
+  async function deleteConference() {
+    if (!confirm(`Permanently delete "${conference.name}"? This cannot be undone.`)) return
+    setActionPending('delete')
+    await fetch(`/api/conferences/${conference.id}`, { method: 'DELETE' })
+    router.push('/conferences')
+    router.refresh()
+  }
 
   const verticals: string[]    = JSON.parse(conference.verticals || '[]')
   const buyerPersonas: string[] = JSON.parse(conference.buyerPersonas || '[]')
@@ -121,7 +141,23 @@ export default function ConferenceDetailClient({
           Back
         </button>
         {isManager && (
-          <Link href={`/manager/conferences/${conference.id}/edit`} className="btn-secondary text-xs py-1.5 px-3">Edit Conference</Link>
+          <div className="flex items-center gap-2">
+            <Link href={`/manager/conferences/${conference.id}/edit`} className="btn-secondary text-xs py-1.5 px-3">Edit</Link>
+            <button
+              onClick={hideConference}
+              disabled={actionPending !== null}
+              className="btn-secondary text-xs py-1.5 px-3 text-content-muted"
+            >
+              {actionPending === 'hide' ? 'Hiding…' : 'Hide'}
+            </button>
+            <button
+              onClick={deleteConference}
+              disabled={actionPending !== null}
+              className="text-xs py-1.5 px-3 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors font-medium"
+            >
+              {actionPending === 'delete' ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
         )}
       </div>
 
