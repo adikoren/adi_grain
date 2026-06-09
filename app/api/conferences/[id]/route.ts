@@ -75,6 +75,25 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   if (!session || !['ADMIN', 'MANAGER'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
-  await db.conference.delete({ where: { id: params.id } })
+
+  const confId = params.id
+
+  // Remove this conference from any TripOpportunity.conferenceIds JSON arrays
+  const trips = await db.tripOpportunity.findMany({
+    where: { conferenceIds: { contains: confId } },
+    select: { id: true, conferenceIds: true },
+  })
+  for (const trip of trips) {
+    let ids: string[] = []
+    try { ids = JSON.parse(trip.conferenceIds) } catch { /* ignore */ }
+    const updated = ids.filter(id => id !== confId)
+    await db.tripOpportunity.update({
+      where: { id: trip.id },
+      data: { conferenceIds: JSON.stringify(updated) },
+    })
+  }
+
+  // Cascade on ConferenceAssignment, ConferenceLead (join record only, Lead preserved), and TargetAccount
+  await db.conference.delete({ where: { id: confId } })
   return NextResponse.json({ ok: true })
 }

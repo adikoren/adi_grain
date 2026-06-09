@@ -94,7 +94,7 @@ export default function ConferenceDetailClient({
   }
 
   async function deleteConference() {
-    if (!confirm(`Permanently delete "${conference.name}"? This cannot be undone.`)) return
+    if (!confirm(`Are you sure you want to delete "${conference.name}"? This will remove it from planning, calendar, target accounts, and manager dashboards.`)) return
     setActionPending('delete')
     await fetch(`/api/conferences/${conference.id}`, { method: 'DELETE' })
     router.push('/conferences')
