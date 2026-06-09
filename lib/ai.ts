@@ -152,7 +152,9 @@ Priority rules:
 - MEDIUM: Fintech with international operations, marketplace, travel company, asset manager with FX exposure
 - LOW: Technology vendor, consultancy, regulator, media/events company
 
-Always return at least 10 relevant companies. If page content lists them, use those. Otherwise use your knowledge of who attends this type of conference.`
+Always return at least 10 relevant companies. If page content lists them, use those. Otherwise use your knowledge of who attends this type of conference.
+
+IMPORTANT: Respond with ONLY the raw JSON array. No explanation, no markdown, no code fences. Start your response with [ and end with ].`
 
   const contentSection = conf.pageContent
     ? `\n\nConference page content (use this first):\n${conf.pageContent.slice(0, 8000)}`
@@ -164,13 +166,32 @@ Date: ${conf.startDate || 'upcoming'}
 Verticals: ${conf.verticals.join(', ') || 'fintech, payments'}
 Audience size: ${conf.estimatedAudience || 'unknown'}${contentSection}
 
-Identify companies attending this conference that are relevant to Grain.`
+Return a JSON array of companies attending this conference relevant to Grain.`
 
   const raw = await callLLM(prompt, system)
+  return parseJsonArray(raw)
+}
+
+function parseJsonArray(raw: string): any[] {
   const cleaned = raw.replace(/```json|```/g, '').trim()
-  const match = cleaned.match(/\[[\s\S]*\]/)
-  if (!match) throw new Error('No JSON array in AI response')
-  return JSON.parse(match[0])
+
+  // Try direct array parse first
+  const arrMatch = cleaned.match(/\[[\s\S]*\]/)
+  if (arrMatch) {
+    try { return JSON.parse(arrMatch[0]) } catch { /* fall through */ }
+  }
+
+  // Try unwrapping {"companies": [...]} or similar object wrapper
+  const objMatch = cleaned.match(/\{[\s\S]*\}/)
+  if (objMatch) {
+    try {
+      const obj = JSON.parse(objMatch[0])
+      const arr = obj.companies ?? obj.attendees ?? obj.results ?? Object.values(obj).find(Array.isArray)
+      if (Array.isArray(arr)) return arr
+    } catch { /* fall through */ }
+  }
+
+  throw new Error('Could not parse AI response as JSON. Please try again.')
 }
 
 // ── Feature: Conference discovery (AI + web content) ─────────────────────────
