@@ -587,6 +587,9 @@ function TargetAccountsPanel({ conferenceId, conferenceName, conferenceWebsite, 
           {extractError && (
             <div className="space-y-2">
               <p className="text-xs text-red-500">{extractError}</p>
+              {extractError.toLowerCase().includes('api key') && (
+                <a href="/admin/settings" className="text-xs text-red-600 underline hover:text-red-800">Go to Admin → Settings →</a>
+              )}
               <div className="flex gap-2">
                 <input
                   className="input flex-1 text-xs"

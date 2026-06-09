@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { extractConferenceCompanies } from '@/lib/ai'
+import { getConfig } from '@/lib/config'
 
 async function fetchPageText(url: string): Promise<string | null> {
   try {
@@ -32,6 +33,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession(authOptions)
   if (!session || !['ADMIN', 'MANAGER'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  const cfg = await getConfig()
+  if (!cfg.aiApiKey) {
+    return NextResponse.json(
+      { error: 'AI API key not configured. Go to Admin → Settings to add your API key.' },
+      { status: 400 }
+    )
   }
 
   const conference = await db.conference.findUnique({
