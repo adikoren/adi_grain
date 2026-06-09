@@ -59,7 +59,6 @@ export async function POST(req: NextRequest) {
 
     // ── Need to generate ──────────────────────────────────────────────────────
     const cfg = await getConfig()
-    const provider = cfg.aiProvider
     const apiKey = cfg.aiApiKey
 
     if (!apiKey) {
@@ -109,36 +108,19 @@ Role to meet: ${jobTitle || 'Unknown'}${confContext}${websiteSection}
 
 Generate a Company Brief for a Grain sales rep.`
 
-    let raw: string
-
-    if (provider === 'ANTHROPIC') {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 600,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error?.message || 'Anthropic API error')
-      raw = data.content[0].text
-    } else {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
-          max_tokens: 600,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error?.message || 'OpenAI API error')
-      raw = data.choices[0].message.content
-    }
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 600,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+    const aiData = await res.json()
+    if (!res.ok) throw new Error(aiData.error?.message || 'Anthropic API error')
+    const raw = aiData.content[0].text
 
     // Find balanced JSON object (greedy regex fails if AI adds trailing text with braces)
     const start = raw.indexOf('{')
@@ -167,7 +149,7 @@ Generate a Company Brief for a Grain sales rep.`
         keyPeople:      suggestions.keyPeople      || null,
         salesAngle:     suggestions.salesAngle     || null,
         website:        website || null,
-        dataSource:     provider === 'ANTHROPIC' ? 'AI_ANTHROPIC' : 'AI_OPENAI',
+        dataSource:     'AI_ANTHROPIC',
         confidence:     'HIGH',
         lastEnrichedAt: new Date(),
       },
@@ -182,7 +164,7 @@ Generate a Company Brief for a Grain sales rep.`
         keyPeople:      suggestions.keyPeople      || null,
         salesAngle:     suggestions.salesAngle     || null,
         website:        website || undefined,
-        dataSource:     provider === 'ANTHROPIC' ? 'AI_ANTHROPIC' : 'AI_OPENAI',
+        dataSource:     'AI_ANTHROPIC',
         confidence:     'HIGH',
         lastEnrichedAt: new Date(),
       },

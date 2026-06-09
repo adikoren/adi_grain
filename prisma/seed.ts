@@ -88,7 +88,7 @@ async function main() {
   await prisma.systemConfig.upsert({
     where: { id: 'singleton' },
     update: {},
-    create: { id: 'singleton', aiProvider: 'OPENAI', hubspotMode: 'MOCK' },
+    create: { id: 'singleton', aiProvider: 'ANTHROPIC', hubspotMode: 'MOCK' },
   })
 
   // ── Upcoming conferences ──────────────────────────────────────────────────

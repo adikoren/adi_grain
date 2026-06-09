@@ -6,7 +6,6 @@ type TestStatus = 'idle' | 'testing' | 'connected' | 'invalid_key' | 'network_er
 export default function AdminSettingsPage() {
   const [config, setConfig] = useState<any>(null)
   const [aiKey, setAiKey] = useState('')
-  const [aiProvider, setAiProvider] = useState('OPENAI')
   const [hubspotMode, setHubspotMode] = useState('MOCK')
   const [hubspotKey, setHubspotKey] = useState('')
   const [serperKey, setSerperKey] = useState('')
@@ -19,7 +18,6 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     fetch('/api/admin/config').then(r => r.json()).then(d => {
       setConfig(d)
-      setAiProvider(d.aiProvider || 'OPENAI')
       setHubspotMode(d.hubspotMode || 'MOCK')
     })
   }, [])
@@ -30,7 +28,7 @@ export default function AdminSettingsPage() {
   async function save(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true); setSaved(false)
-    const body: any = { aiProvider, hubspotMode }
+    const body: any = { aiProvider: 'ANTHROPIC', hubspotMode }
     if (aiKey) body.aiApiKey = aiKey
     if (hubspotKey) body.hubspotApiKey = hubspotKey
     if (serperKey) body.serperApiKey = serperKey
@@ -125,14 +123,7 @@ export default function AdminSettingsPage() {
         <div className="card space-y-4">
           <h2 className="font-semibold text-brand-accent">AI Configuration</h2>
           <div>
-            <label className="label">Provider</label>
-            <select className="input" value={aiProvider} onChange={e => setAiProvider(e.target.value)}>
-              <option value="OPENAI">OpenAI (GPT-4o mini)</option>
-              <option value="ANTHROPIC">Anthropic (Claude Haiku)</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">API Key</label>
+            <label className="label">Anthropic API Key</label>
             <input
               className="input" type="password"
               placeholder={config?.aiApiKeySet ? '••••••••••••• (set — enter new to replace)' : 'Enter API key…'}

@@ -10,14 +10,13 @@ export interface SystemConfig {
 
 function fromEnv(): Partial<SystemConfig> {
   const anthropicKey = process.env.ANTHROPIC_API_KEY || null
-  const openaiKey    = process.env.OPENAI_API_KEY    || null
   const hubspotKey   = process.env.HUBSPOT_API_KEY   || null
   const serperKey    = process.env.SERPER_API_KEY     || null
 
   return {
-    aiProvider:    openaiKey && !anthropicKey ? 'OPENAI' : 'ANTHROPIC',
-    aiApiKey:      anthropicKey || openaiKey  || null,
-    hubspotMode:   hubspotKey   ? 'REAL'      : 'MOCK',
+    aiProvider:    'ANTHROPIC',
+    aiApiKey:      anthropicKey,
+    hubspotMode:   hubspotKey ? 'REAL' : 'MOCK',
     hubspotApiKey: hubspotKey,
     serperApiKey:  serperKey,
   }

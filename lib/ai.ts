@@ -2,48 +2,26 @@ import { getConfig } from './config'
 
 async function callLLM(prompt: string, systemPrompt: string): Promise<string> {
   const cfg = await getConfig()
-  const { aiProvider: provider, aiApiKey: apiKey } = cfg
+  const apiKey = cfg.aiApiKey
   if (!apiKey) throw new Error('AI API key not configured. Ask your admin to set it up.')
 
-  if (provider === 'ANTHROPIC') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error?.message || 'Anthropic API error')
-    return data.content[0].text
-  }
-
-  // Default: OpenAI
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: prompt }],
     }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error?.message || 'OpenAI API error')
-  return data.choices[0].message.content
+  if (!res.ok) throw new Error(data.error?.message || 'Anthropic API error')
+  return data.content[0].text
 }
 
 // ── Feature: Follow-up email draft ────────────────────────────────────────────

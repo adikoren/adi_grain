@@ -206,7 +206,6 @@ export async function POST(req: NextRequest) {
   const cfg          = await getConfig()
   const serperApiKey = cfg.serperApiKey
   const aiApiKey     = cfg.aiApiKey
-  const provider     = cfg.aiProvider
 
   // ── 0. Named person lookup — when a specific person is already pre-filled ─
   // Look up that exact person rather than falling through to company+role search,
@@ -511,7 +510,7 @@ Who is likely the ${jobTitle} at ${company}?`
   try {
     let raw: string
 
-    if (provider === 'ANTHROPIC') {
+    {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': aiApiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -525,19 +524,6 @@ Who is likely the ${jobTitle} at ${company}?`
       const data = await res.json()
       if (!res.ok) throw new Error(data.error?.message || 'Anthropic API error')
       raw = data.content[0].text
-    } else {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${aiApiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
-          max_tokens: 256,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error?.message || 'OpenAI API error')
-      raw = data.choices[0].message.content
     }
 
     const start = raw.indexOf('{')
@@ -562,7 +548,7 @@ Who is likely the ${jobTitle} at ${company}?`
         lastName:       result.lastName   || null,
         linkedinUrl:    result.linkedinHint || null,
         summary:        result.summary    || null,
-        dataSource:     provider === 'ANTHROPIC' ? 'AI_ANTHROPIC' : 'AI_OPENAI',
+        dataSource:     'AI_ANTHROPIC',
         confidence:     (result.confidence || 'LOW').toUpperCase(),
         needsReview,
         lastEnrichedAt: new Date(),
@@ -572,7 +558,7 @@ Who is likely the ${jobTitle} at ${company}?`
         lastName:       result.lastName   || null,
         linkedinUrl:    result.linkedinHint || null,
         summary:        result.summary    || null,
-        dataSource:     provider === 'ANTHROPIC' ? 'AI_ANTHROPIC' : 'AI_OPENAI',
+        dataSource:     'AI_ANTHROPIC',
         confidence:     (result.confidence || 'LOW').toUpperCase(),
         needsReview,
         lastEnrichedAt: new Date(),
