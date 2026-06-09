@@ -15,6 +15,13 @@ interface Conference {
 
 interface Rep { id: string; name: string }
 
+interface DiscoveredConference {
+  name: string; city: string; country: string
+  startDate: string; endDate: string
+  website?: string; verticals?: string[]
+  estimatedAudience?: number; notes?: string
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DAYS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -63,6 +70,55 @@ export default function ConferenceCalendarClient({
   const [selected, setSelected] = useState<Conference | null>(null)
   const [filterRep,  setFilterRep]  = useState<string>('all')
   const [filterTier, setFilterTier] = useState<string>('all')
+
+  // Conference discovery
+  const [discovering, setDiscovering] = useState(false)
+  const [discovered,  setDiscovered]  = useState<DiscoveredConference[] | null>(null)
+  const [discoverErr, setDiscoverErr] = useState<string | null>(null)
+  const [importing,   setImporting]   = useState<Set<number>>(new Set())
+  const [imported,    setImported]    = useState<Set<number>>(new Set())
+
+  async function runDiscover() {
+    setDiscovering(true)
+    setDiscoverErr(null)
+    setDiscovered(null)
+    setImporting(new Set())
+    setImported(new Set())
+    try {
+      const res = await fetch('/api/conferences/discover', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Discovery failed')
+      setDiscovered(data.conferences || [])
+    } catch (e: any) {
+      setDiscoverErr(e.message)
+    } finally {
+      setDiscovering(false)
+    }
+  }
+
+  async function importConference(c: DiscoveredConference, idx: number) {
+    setImporting(prev => new Set(prev).add(idx))
+    try {
+      const res = await fetch('/api/conferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: c.name, city: c.city, country: c.country,
+          startDate: c.startDate, endDate: c.endDate,
+          website: c.website || null,
+          verticals: c.verticals || [],
+          estimatedAudience: c.estimatedAudience || null,
+          notes: c.notes || null,
+        }),
+      })
+      if (!res.ok) throw new Error('Import failed')
+      setImported(prev => new Set(prev).add(idx))
+    } catch {
+      // leave importing state so user can retry
+    } finally {
+      setImporting(prev => { const s = new Set(prev); s.delete(idx); return s })
+    }
+  }
 
   // Stable rep → color index mapping
   const repColorIdx = useMemo(() => {
@@ -150,9 +206,18 @@ export default function ConferenceCalendarClient({
         </div>
         <div className="flex items-center gap-2">
           <Link href="/conferences/all" className="btn-secondary text-sm">List view</Link>
-          {isManager && (
+          {isManager && (<>
+            <button
+              onClick={runDiscover}
+              disabled={discovering}
+              className="btn-secondary text-sm flex items-center gap-1.5"
+            >
+              {discovering
+                ? <><span className="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full" /> Scanning…</>
+                : '✦ Discover'}
+            </button>
             <Link href="/manager/conferences/new" className="btn-primary text-sm">+ Add</Link>
-          )}
+          </>)}
         </div>
       </div>
 
@@ -402,6 +467,80 @@ export default function ConferenceCalendarClient({
           </div>
         )
       })()}
+
+      {/* ── Discover conferences modal ───────────────────────────────────── */}
+      {(discovered !== null || discovering || discoverErr) && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
+              <div>
+                <h2 className="text-base font-semibold text-content-primary">Discover Conferences</h2>
+                <p className="text-xs text-content-muted mt-0.5">AI-scanned fintech event sources</p>
+              </div>
+              <button
+                onClick={() => { setDiscovered(null); setDiscoverErr(null) }}
+                className="text-content-muted hover:text-content-primary text-xl leading-none"
+              >×</button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-3">
+              {discovering && (
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-content-muted">
+                  <span className="animate-spin w-6 h-6 border-2 border-brand-navy border-t-transparent rounded-full" />
+                  <span className="text-sm">Scanning fintech event sources with AI…</span>
+                </div>
+              )}
+              {discoverErr && (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{discoverErr}</div>
+              )}
+              {discovered && discovered.length === 0 && (
+                <p className="text-sm text-content-muted text-center py-8">No new conferences found — all known events are already in your calendar.</p>
+              )}
+              {discovered && discovered.map((c, i) => (
+                <div key={i} className="flex items-start justify-between gap-4 p-3 rounded-xl border border-surface-border hover:bg-surface-raised transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm text-content-primary truncate">{c.name}</p>
+                    <p className="text-xs text-content-muted mt-0.5">
+                      {c.city}, {c.country} · {new Date(c.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                    {c.verticals && c.verticals.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {c.verticals.slice(0, 4).map(v => (
+                          <span key={v} className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-navy/10 text-brand-navy font-medium">{v}</span>
+                        ))}
+                      </div>
+                    )}
+                    {c.notes && <p className="text-xs text-content-muted mt-1 line-clamp-2">{c.notes}</p>}
+                  </div>
+                  <button
+                    onClick={() => importConference(c, i)}
+                    disabled={importing.has(i) || imported.has(i)}
+                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                      imported.has(i)
+                        ? 'bg-green-100 text-green-700 border border-green-200 cursor-default'
+                        : importing.has(i)
+                          ? 'bg-surface-raised text-content-muted cursor-wait'
+                          : 'bg-brand-navy text-white hover:bg-brand-navy/90'
+                    }`}
+                  >
+                    {imported.has(i) ? '✓ Added' : importing.has(i) ? 'Adding…' : '+ Add'}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            {discovered && discovered.length > 0 && (
+              <div className="px-6 py-3 border-t border-surface-border flex items-center justify-between">
+                <span className="text-xs text-content-muted">{discovered.length} new conference{discovered.length !== 1 ? 's' : ''} found</span>
+                <button onClick={runDiscover} disabled={discovering} className="text-xs text-brand-accent hover:underline">Scan again</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
