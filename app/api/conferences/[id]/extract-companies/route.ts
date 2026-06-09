@@ -4,32 +4,13 @@ import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { extractConferenceCompanies } from '@/lib/ai'
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session || !['ADMIN', 'MANAGER'].includes(session.user.role)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-  }
-
-  const { url } = await req.json()
-  if (!url || typeof url !== 'string') {
-    return NextResponse.json({ error: 'URL required' }, { status: 400 })
-  }
-
-  const conference = await db.conference.findUnique({
-    where: { id: params.id },
-    select: { name: true },
-  })
-  if (!conference) return NextResponse.json({ error: 'Conference not found' }, { status: 404 })
-
+async function fetchPageText(url: string): Promise<string | null> {
   try {
-    const fullUrl = url.startsWith('http') ? url : `https://${url}`
-    const res = await fetch(fullUrl, {
+    const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GrainBot/1.0)' },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(10000),
     })
-    if (!res.ok) {
-      return NextResponse.json({ error: `Could not fetch URL (HTTP ${res.status})` }, { status: 400 })
-    }
+    if (!res.ok) return null
     const html = await res.text()
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -37,17 +18,68 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
+    return text.length >= 100 ? text : null
+  } catch {
+    return null
+  }
+}
 
-    if (text.length < 100) {
-      return NextResponse.json({ error: 'Page content too short or blocked' }, { status: 400 })
-    }
+function normaliseBase(url: string): string {
+  return url.replace(/\/$/, '')
+}
 
-    const companies = await extractConferenceCompanies(text, conference.name)
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session || !['ADMIN', 'MANAGER'].includes(session.user.role)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  const conference = await db.conference.findUnique({
+    where: { id: params.id },
+    select: { name: true, website: true },
+  })
+  if (!conference) return NextResponse.json({ error: 'Conference not found' }, { status: 404 })
+
+  // URL from body overrides; otherwise fall back to conference.website
+  let body: { url?: string } = {}
+  try { body = await req.json() } catch { /* empty body is fine */ }
+
+  const overrideUrl = body.url?.trim()
+  const baseUrl = overrideUrl
+    ? (overrideUrl.startsWith('http') ? overrideUrl : `https://${overrideUrl}`)
+    : conference.website
+
+  if (!baseUrl) {
+    return NextResponse.json(
+      { error: 'No website URL saved for this conference. Enter a URL manually.' },
+      { status: 400 }
+    )
+  }
+
+  // Fetch the main URL plus common attendee subpages
+  const base = normaliseBase(baseUrl)
+  const urlsToTry = overrideUrl
+    ? [base]
+    : [base, `${base}/sponsors`, `${base}/exhibitors`, `${base}/speakers`]
+
+  const pageTexts: string[] = []
+  for (const url of urlsToTry) {
+    const text = await fetchPageText(url)
+    if (text) pageTexts.push(text.slice(0, 6000))
+  }
+
+  if (pageTexts.length === 0) {
+    return NextResponse.json(
+      { error: 'Could not fetch conference website. Try entering a specific URL.' },
+      { status: 400 }
+    )
+  }
+
+  try {
+    const combined = pageTexts.join('\n\n---\n\n')
+    const companies = await extractConferenceCompanies(combined, conference.name)
     return NextResponse.json({ companies })
   } catch (err: any) {
-    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
-      return NextResponse.json({ error: 'Request timed out — try a different URL' }, { status: 400 })
-    }
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }

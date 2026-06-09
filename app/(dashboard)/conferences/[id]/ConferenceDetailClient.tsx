@@ -339,7 +339,7 @@ export default function ConferenceDetailClient({
       {tab === 'planning' && (
         <div className="grid lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 space-y-5">
-            <TargetAccountsPanel conferenceId={conference.id} conferenceName={conference.name} targets={conference.targetAccounts} isManager={isManager} onRefresh={() => router.refresh()} />
+            <TargetAccountsPanel conferenceId={conference.id} conferenceName={conference.name} conferenceWebsite={conference.website} targets={conference.targetAccounts} isManager={isManager} onRefresh={() => router.refresh()} />
             {!isManager && conference.targetAccounts.length > 0 && (
               <SuggestedLeadsPanel
                 targets={conference.targetAccounts}
@@ -386,8 +386,8 @@ const ICP_FIT_COLORS: Record<string, string> = {
 }
 
 // ── Target Accounts Panel ─────────────────────────────────────────────────────
-function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager, onRefresh }: {
-  conferenceId: string; conferenceName: string; targets: TargetAccount[]; isManager: boolean; onRefresh: () => void
+function TargetAccountsPanel({ conferenceId, conferenceName, conferenceWebsite, targets, isManager, onRefresh }: {
+  conferenceId: string; conferenceName: string; conferenceWebsite: string | null; targets: TargetAccount[]; isManager: boolean; onRefresh: () => void
 }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm]     = useState({ company: '', contactName: '', contactRole: '', notes: '', priority: 'MEDIUM' })
@@ -400,9 +400,9 @@ function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager,
   }>({ website: '', description: '', industry: '', icpFit: '', fxRelevance: '', relevanceReason: '', companySize: '', confidence: '' })
   const [editSaving, setEditSaving] = useState(false)
 
-  // Extract-from-URL state
+  // Extract state
   const [extractOpen, setExtractOpen]       = useState(false)
-  const [extractUrl, setExtractUrl]         = useState('')
+  const [fallbackUrl, setFallbackUrl]       = useState('')
   const [extractLoading, setExtractLoading] = useState(false)
   const [extractResults, setExtractResults] = useState<Array<{
     name: string; website: string | null; contactName: string | null
@@ -411,13 +411,14 @@ function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager,
   const [extractError, setExtractError]     = useState<string | null>(null)
   const [addingKeys, setAddingKeys]         = useState<Set<string>>(new Set())
 
-  async function runExtract() {
-    if (!extractUrl.trim()) return
+  async function runExtract(overrideUrl?: string) {
     setExtractLoading(true); setExtractError(null); setExtractResults(null)
     try {
+      const body: Record<string, string> = {}
+      if (overrideUrl) body.url = overrideUrl
       const res = await fetch(`/api/conferences/${conferenceId}/extract-companies`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: extractUrl.trim() }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) setExtractError(data.error || 'Failed to extract')
@@ -498,10 +499,23 @@ function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager,
         {isManager && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setExtractOpen(p => !p); setAdding(false) }}
-              className="text-xs text-brand-accent border border-brand-accent/30 hover:bg-brand-accent/5 rounded-lg px-2.5 py-1.5 transition-colors"
+              onClick={() => {
+                if (!extractOpen) {
+                  setExtractOpen(true)
+                  setAdding(false)
+                  setExtractResults(null)
+                  setExtractError(null)
+                  if (conferenceWebsite) runExtract()
+                } else {
+                  setExtractOpen(false)
+                  setExtractResults(null)
+                  setExtractError(null)
+                }
+              }}
+              disabled={extractLoading}
+              className="text-xs text-brand-accent border border-brand-accent/30 hover:bg-brand-accent/5 rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50"
             >
-              ✦ Extract from URL
+              {extractLoading ? <span className="flex items-center gap-1.5"><span className="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full" />Scanning…</span> : '✦ Find Attendees'}
             </button>
             <button onClick={() => { setAdding(p => !p); setExtractOpen(false) }} className="btn-primary text-xs py-1.5 px-3">
               + Add Target
@@ -510,36 +524,98 @@ function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager,
         )}
       </div>
 
-      {/* Extract-from-URL panel */}
+      {/* Extract panel */}
       {isManager && extractOpen && (
         <div className="bg-surface-raised rounded-xl p-4 space-y-3 border border-brand-accent/20">
-          <div>
-            <p className="text-xs font-semibold text-content-primary mb-0.5">Extract companies from a conference page</p>
-            <p className="text-xs text-content-muted">Paste a sponsors, exhibitors, speakers, or agenda URL. AI will identify relevant companies.</p>
-          </div>
-          <div className="flex gap-2">
-            <input
-              className="input flex-1 text-xs"
-              placeholder="https://conference.com/sponsors"
-              value={extractUrl}
-              onChange={e => setExtractUrl(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && runExtract()}
-            />
-            <button onClick={runExtract} disabled={extractLoading || !extractUrl.trim()} className="btn-primary text-xs py-1.5 px-3 min-w-[72px]">
-              {extractLoading ? '…' : 'Extract'}
-            </button>
-            <button onClick={() => { setExtractOpen(false); setExtractResults(null); setExtractUrl('') }} className="btn-secondary text-xs py-1.5 px-3">
-              Close
-            </button>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold text-content-primary">
+                {conferenceWebsite ? `Scanning ${conferenceWebsite}` : 'Enter a conference page URL'}
+              </p>
+              <p className="text-xs text-content-muted mt-0.5">
+                {conferenceWebsite
+                  ? 'AI scans sponsors, exhibitors, and speakers pages automatically.'
+                  : 'Paste a sponsors, exhibitors, or speakers URL.'}
+              </p>
+            </div>
+            <button onClick={() => { setExtractOpen(false); setExtractResults(null); setExtractError(null) }} className="text-content-muted hover:text-content-primary text-lg leading-none flex-shrink-0">×</button>
           </div>
 
-          {extractError && <p className="text-xs text-red-500">{extractError}</p>}
+          {/* Fallback URL input when no website is stored */}
+          {!conferenceWebsite && (
+            <div className="flex gap-2">
+              <input
+                className="input flex-1 text-xs"
+                placeholder="https://conference.com/sponsors"
+                value={fallbackUrl}
+                onChange={e => setFallbackUrl(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && fallbackUrl.trim() && runExtract(fallbackUrl.trim())}
+              />
+              <button
+                onClick={() => runExtract(fallbackUrl.trim())}
+                disabled={extractLoading || !fallbackUrl.trim()}
+                className="btn-primary text-xs py-1.5 px-3 min-w-[72px]"
+              >
+                {extractLoading ? '…' : 'Scan'}
+              </button>
+            </div>
+          )}
+
+          {/* Override URL when website IS stored */}
+          {conferenceWebsite && !extractLoading && !extractResults && !extractError && (
+            <div className="flex gap-2">
+              <input
+                className="input flex-1 text-xs"
+                placeholder="Or paste a specific page URL (sponsors, speakers…)"
+                value={fallbackUrl}
+                onChange={e => setFallbackUrl(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && fallbackUrl.trim() && runExtract(fallbackUrl.trim())}
+              />
+              {fallbackUrl.trim() && (
+                <button onClick={() => runExtract(fallbackUrl.trim())} className="btn-secondary text-xs py-1.5 px-3">Scan this URL</button>
+              )}
+            </div>
+          )}
+
+          {extractLoading && (
+            <div className="flex items-center gap-2 text-xs text-content-muted py-2">
+              <span className="animate-spin w-4 h-4 border-2 border-brand-navy border-t-transparent rounded-full" />
+              Scanning for attending companies…
+            </div>
+          )}
+
+          {extractError && (
+            <div className="space-y-2">
+              <p className="text-xs text-red-500">{extractError}</p>
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1 text-xs"
+                  placeholder="Try a specific page URL"
+                  value={fallbackUrl}
+                  onChange={e => setFallbackUrl(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && fallbackUrl.trim() && runExtract(fallbackUrl.trim())}
+                />
+                <button
+                  onClick={() => runExtract(fallbackUrl.trim())}
+                  disabled={!fallbackUrl.trim()}
+                  className="btn-primary text-xs py-1.5 px-3"
+                >Scan</button>
+              </div>
+            </div>
+          )}
 
           {extractResults && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-content-primary">
-                {extractResults.length === 0 ? 'No relevant companies found on that page.' : `${extractResults.length} companies found`}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-content-primary">
+                  {extractResults.length === 0
+                    ? 'No relevant companies found.'
+                    : `${extractResults.length} attending companies found`}
+                </p>
+                {conferenceWebsite && (
+                  <button onClick={() => runExtract()} className="text-xs text-brand-accent hover:underline">Scan again</button>
+                )}
+              </div>
               {extractResults.length > 0 && (
                 <div className="max-h-72 overflow-y-auto space-y-1">
                   {extractResults.map(c => {

@@ -78,9 +78,9 @@ export default function ConferenceCalendarClient({
   const [importing,   setImporting]   = useState<Set<number>>(new Set())
   const [imported,    setImported]    = useState<Set<number>>(new Set())
 
-  // Extract companies from URL
+  // Extract companies state
   const [extractConf,    setExtractConf]    = useState<Conference | null>(null)
-  const [extractUrl,     setExtractUrl]     = useState('')
+  const [fallbackUrl,    setFallbackUrl]    = useState('')
   const [extractLoading, setExtractLoading] = useState(false)
   const [extractResults, setExtractResults] = useState<Array<{
     name: string; website: string | null; contactName: string | null
@@ -90,28 +90,34 @@ export default function ConferenceCalendarClient({
   const [addingKeys,     setAddingKeys]     = useState<Set<string>>(new Set())
   const [addedKeys,      setAddedKeys]      = useState<Set<string>>(new Set())
 
-  function openExtract(conf: Conference) {
+  async function openExtract(conf: Conference) {
     setExtractConf(conf)
-    setExtractUrl('')
+    setFallbackUrl('')
     setExtractResults(null)
     setExtractError(null)
     setAddingKeys(new Set())
     setAddedKeys(new Set())
+    if (conf.website) runExtractFor(conf.id, undefined)
   }
 
-  async function runExtract() {
-    if (!extractConf || !extractUrl.trim()) return
+  async function runExtractFor(confId: string, overrideUrl?: string) {
     setExtractLoading(true); setExtractError(null); setExtractResults(null)
     try {
-      const res = await fetch(`/api/conferences/${extractConf.id}/extract-companies`, {
+      const body: Record<string, string> = {}
+      if (overrideUrl) body.url = overrideUrl
+      const res = await fetch(`/api/conferences/${confId}/extract-companies`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: extractUrl.trim() }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) setExtractError(data.error || 'Failed to extract')
       else setExtractResults(data.companies || [])
     } catch { setExtractError('Network error') }
     finally { setExtractLoading(false) }
+  }
+
+  function runExtract() {
+    if (extractConf) runExtractFor(extractConf.id, fallbackUrl.trim() || undefined)
   }
 
   async function addTarget(c: NonNullable<typeof extractResults>[0]) {
@@ -534,34 +540,45 @@ export default function ConferenceCalendarClient({
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border">
               <div>
-                <h2 className="text-base font-semibold text-content-primary">Extract Target Companies</h2>
+                <h2 className="text-base font-semibold text-content-primary">Find Attending Companies</h2>
                 <p className="text-xs text-content-muted mt-0.5">{extractConf.name}</p>
               </div>
               <button onClick={() => setExtractConf(null)} className="text-content-muted hover:text-content-primary text-xl leading-none">×</button>
             </div>
 
             <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
-              <p className="text-xs text-content-muted">
-                Paste a sponsors, exhibitors, speakers, or agenda URL. AI will identify companies relevant to Grain and score them by ICP priority.
-              </p>
-              <div className="flex gap-2">
-                <input
-                  className="input flex-1"
-                  placeholder="https://conference.com/sponsors"
-                  value={extractUrl}
-                  onChange={e => setExtractUrl(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && runExtract()}
-                  autoFocus
-                />
-                <button onClick={runExtract} disabled={extractLoading || !extractUrl.trim()} className="btn-primary text-sm px-4 min-w-[80px]">
-                  {extractLoading ? '…' : 'Extract'}
-                </button>
-              </div>
+              {/* Fallback/override URL input */}
+              {(!extractConf.website || extractError) && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-content-muted">
+                    {!extractConf.website
+                      ? 'No website saved for this conference. Paste a sponsors, exhibitors, or speakers page URL.'
+                      : 'Try a specific page URL instead:'}
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      className="input flex-1"
+                      placeholder="https://conference.com/sponsors"
+                      value={fallbackUrl}
+                      onChange={e => setFallbackUrl(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && fallbackUrl.trim() && runExtractFor(extractConf.id, fallbackUrl.trim())}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => runExtractFor(extractConf.id, fallbackUrl.trim() || undefined)}
+                      disabled={extractLoading || (!extractConf.website && !fallbackUrl.trim())}
+                      className="btn-primary text-sm px-4 min-w-[80px]"
+                    >
+                      {extractLoading ? '…' : 'Scan'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {extractLoading && (
                 <div className="flex items-center gap-2 text-sm text-content-muted py-4 justify-center">
                   <span className="animate-spin w-4 h-4 border-2 border-brand-navy border-t-transparent rounded-full" />
-                  Scanning page with AI…
+                  Scanning conference pages with AI…
                 </div>
               )}
 
@@ -570,7 +587,7 @@ export default function ConferenceCalendarClient({
               )}
 
               {extractResults && extractResults.length === 0 && (
-                <p className="text-sm text-content-muted text-center py-6">No relevant companies found. Try a sponsors, exhibitors, or speakers page URL.</p>
+                <p className="text-sm text-content-muted text-center py-6">No relevant companies found. Try a specific sponsors or exhibitors page URL.</p>
               )}
 
               {extractResults && extractResults.map(c => {
@@ -587,7 +604,6 @@ export default function ConferenceCalendarClient({
                                                     'bg-slate-100 text-slate-600'
                         }`}>{c.priority}</span>
                         {c.companyType && <span className="text-xs text-content-muted">{c.companyType}</span>}
-                        <span className="text-[10px] text-content-muted/60 capitalize">{c.source}</span>
                       </div>
                       {(c.contactName || c.contactRole) && (
                         <p className="text-xs text-content-muted mt-0.5">{c.contactName}{c.contactRole ? ` · ${c.contactRole}` : ''}</p>
