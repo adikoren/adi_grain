@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { discoverConferences } from '@/lib/ai'
 import { db } from '@/lib/db'
+import { getConfig } from '@/lib/config'
 
 const SOURCES = [
   // Fintech / payments focused
@@ -22,11 +23,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
+  // Fail fast if AI is not configured
+  const cfg = await getConfig()
+  if (!cfg.aiApiKey) {
+    return NextResponse.json(
+      { error: 'AI API key not configured. Go to Admin → Settings to add your API key.' },
+      { status: 400 }
+    )
+  }
+
   // Exclude hidden conferences so they can resurface in discovery
   const existing = await db.conference.findMany({ where: { isHidden: false }, select: { name: true } })
   const existingNames = new Set(existing.map(c => c.name.toLowerCase()))
 
   const results: any[] = []
+  let sourceErrors = 0
 
   for (const url of SOURCES) {
     try {
@@ -34,7 +45,7 @@ export async function POST(req: NextRequest) {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GrainBot/1.0)' },
         signal: AbortSignal.timeout(10000),
       })
-      if (!res.ok) continue
+      if (!res.ok) { sourceErrors++; continue }
       const html = await res.text()
       const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 15000)
 
@@ -46,9 +57,13 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (err) {
+      sourceErrors++
       console.error(`Failed to fetch ${url}:`, err)
     }
   }
 
-  return NextResponse.json({ conferences: results.slice(0, 50) })
+  return NextResponse.json({
+    conferences: results.slice(0, 50),
+    sourceErrors: sourceErrors > 0 ? sourceErrors : undefined,
+  })
 }

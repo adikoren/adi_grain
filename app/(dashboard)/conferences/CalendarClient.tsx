@@ -650,7 +650,13 @@ export default function ConferenceCalendarClient({
                 </div>
               )}
               {discoverErr && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{discoverErr}</div>
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm space-y-1">
+                  <p className="font-medium">Discovery failed</p>
+                  <p>{discoverErr}</p>
+                  {discoverErr.toLowerCase().includes('api key') && (
+                    <a href="/admin/settings" className="underline text-red-600 hover:text-red-800 text-xs">Go to Admin → Settings →</a>
+                  )}
+                </div>
               )}
               {discovered && discovered.length === 0 && (
                 <p className="text-sm text-content-muted text-center py-8">No new conferences found — all known events are already in your calendar.</p>
