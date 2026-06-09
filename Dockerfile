@@ -46,6 +46,8 @@ ENV DATABASE_URL="file:/app/prisma/seed-template.db"
 
 RUN npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss
 RUN npx tsx prisma/seed.ts
+# Stamp the template with a hash of the schema so the entrypoint can detect schema changes
+RUN md5sum /app/prisma/schema.prisma | awk '{print $1}' > /app/prisma/seed-template.version
 
 
 # ── Stage 4: Production runner ────────────────────────────────────────────────
@@ -73,7 +75,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modul
 COPY --from=builder --chown=nextjs:nodejs /app/prisma/schema.prisma ./prisma/schema.prisma
 
 # Pre-seeded SQLite template — copied to /data/grain.db on first container start
-COPY --from=seeder --chown=nextjs:nodejs /app/prisma/seed-template.db ./prisma/seed-template.db
+COPY --from=seeder --chown=nextjs:nodejs /app/prisma/seed-template.db     ./prisma/seed-template.db
+COPY --from=seeder --chown=nextjs:nodejs /app/prisma/seed-template.version ./prisma/seed-template.version
 
 # Persistent data directory (mount a volume here in production)
 RUN mkdir -p /data && chown nextjs:nodejs /data

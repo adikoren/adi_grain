@@ -12,13 +12,23 @@ case "$DB_FILE" in
   *)  DB_PATH="/app/$DB_FILE" ;;
 esac
 
+VERSION_PATH="${DB_PATH%.db}.version"
+TEMPLATE_VERSION=$(cat /app/prisma/seed-template.version 2>/dev/null || echo "unknown")
+CURRENT_VERSION=$(cat "$VERSION_PATH" 2>/dev/null || echo "")
+
 if [ ! -f "$DB_PATH" ]; then
-  echo "First run — loading demo database..."
+  echo "First run — loading demo database (schema v${TEMPLATE_VERSION})..."
   mkdir -p "$(dirname "$DB_PATH")"
   cp /app/prisma/seed-template.db "$DB_PATH"
+  echo "$TEMPLATE_VERSION" > "$VERSION_PATH"
   echo "Demo data ready."
+elif [ "$TEMPLATE_VERSION" != "$CURRENT_VERSION" ]; then
+  echo "Schema updated (${CURRENT_VERSION} → ${TEMPLATE_VERSION}) — resetting demo database..."
+  cp /app/prisma/seed-template.db "$DB_PATH"
+  echo "$TEMPLATE_VERSION" > "$VERSION_PATH"
+  echo "Demo data reset."
 else
-  echo "Database found at $DB_PATH"
+  echo "Database up to date (schema v${TEMPLATE_VERSION})."
 fi
 
 echo "Starting server on port ${PORT:-3000}..."
