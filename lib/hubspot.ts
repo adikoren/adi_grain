@@ -1,4 +1,5 @@
 import { db } from './db'
+import { getConfig } from './config'
 
 export interface ContactPayload {
   id: string
@@ -29,13 +30,13 @@ function buildHubSpotProperties(lead: ContactPayload) {
 // ── Config helpers ────────────────────────────────────────────────────────────
 
 async function getMode(): Promise<'MOCK' | 'REAL'> {
-  const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
-  return (cfg?.hubspotMode as 'MOCK' | 'REAL') || 'MOCK'
+  const cfg = await getConfig()
+  return (cfg.hubspotMode as 'MOCK' | 'REAL') || 'MOCK'
 }
 
 async function getApiKey(): Promise<string | null> {
-  const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
-  return cfg?.hubspotApiKey || null
+  const cfg = await getConfig()
+  return cfg.hubspotApiKey
 }
 
 // ── Mock implementation ───────────────────────────────────────────────────────

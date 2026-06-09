@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { getConfig } from '@/lib/config'
 
 const CACHE_DAYS = 7
 const INTERNAL_CONFIDENCE_THRESHOLD = 0.90
@@ -202,10 +203,10 @@ export async function POST(req: NextRequest) {
   const companyKey = company.toLowerCase().trim()
   const titleKey   = jobTitle.toLowerCase().trim()
 
-  const cfg          = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
-  const serperApiKey = cfg?.serperApiKey || null
-  const aiApiKey     = cfg?.aiApiKey    || null
-  const provider     = cfg?.aiProvider  || 'OPENAI'
+  const cfg          = await getConfig()
+  const serperApiKey = cfg.serperApiKey
+  const aiApiKey     = cfg.aiApiKey
+  const provider     = cfg.aiProvider
 
   // ── 0. Named person lookup — when a specific person is already pre-filled ─
   // Look up that exact person rather than falling through to company+role search,

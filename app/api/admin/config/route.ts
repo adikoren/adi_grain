@@ -2,19 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { getConfig } from '@/lib/config'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
-  const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
+  const cfg = await getConfig()
   return NextResponse.json({
-    aiProvider: cfg?.aiProvider,
-    aiApiKeySet: !!cfg?.aiApiKey,
-    hubspotMode: cfg?.hubspotMode,
-    hubspotApiKeySet: !!cfg?.hubspotApiKey,
-    serperApiKeySet: !!cfg?.serperApiKey,
+    aiProvider: cfg.aiProvider,
+    aiApiKeySet: !!cfg.aiApiKey,
+    hubspotMode: cfg.hubspotMode,
+    hubspotApiKeySet: !!cfg.hubspotApiKey,
+    serperApiKeySet: !!cfg.serperApiKey,
   })
 }
 

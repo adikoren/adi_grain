@@ -1,12 +1,8 @@
-import { db } from './db'
-
-async function getConfig() {
-  const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
-  return { provider: cfg?.aiProvider || 'OPENAI', apiKey: cfg?.aiApiKey || null }
-}
+import { getConfig } from './config'
 
 async function callLLM(prompt: string, systemPrompt: string): Promise<string> {
-  const { provider, apiKey } = await getConfig()
+  const cfg = await getConfig()
+  const { aiProvider: provider, aiApiKey: apiKey } = cfg
   if (!apiKey) throw new Error('AI API key not configured. Ask your admin to set it up.')
 
   if (provider === 'ANTHROPIC') {

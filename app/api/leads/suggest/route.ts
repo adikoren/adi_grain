@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
+import { getConfig } from '@/lib/config'
 
 const CACHE_DAYS = 30
 
@@ -57,9 +58,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Need to generate ──────────────────────────────────────────────────────
-    const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
-    const provider = cfg?.aiProvider || 'OPENAI'
-    const apiKey = cfg?.aiApiKey || null
+    const cfg = await getConfig()
+    const provider = cfg.aiProvider
+    const apiKey = cfg.aiApiKey
 
     if (!apiKey) {
       if (cached) return NextResponse.json({ suggestions: cached, source: 'stale_cache' })
