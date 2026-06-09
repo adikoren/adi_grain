@@ -355,6 +355,7 @@ export default function ConferenceDetailClient({
             {!isManager && (
               <MyFocusPanel
                 conferenceId={conference.id}
+                conferenceName={conference.name}
                 assignment={conference.assignments.find(a => a.userId === currentUserId) || null}
                 attendingStatus={conference.attendingStatus}
                 meetingsScheduled={conference.meetingsScheduled}
@@ -398,6 +399,47 @@ function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager,
     companySize: string; confidence: string
   }>({ website: '', description: '', industry: '', icpFit: '', fxRelevance: '', relevanceReason: '', companySize: '', confidence: '' })
   const [editSaving, setEditSaving] = useState(false)
+
+  // Extract-from-URL state
+  const [extractOpen, setExtractOpen]       = useState(false)
+  const [extractUrl, setExtractUrl]         = useState('')
+  const [extractLoading, setExtractLoading] = useState(false)
+  const [extractResults, setExtractResults] = useState<Array<{
+    name: string; website: string | null; contactName: string | null
+    contactRole: string | null; priority: string; companyType: string | null; source: string
+  }> | null>(null)
+  const [extractError, setExtractError]     = useState<string | null>(null)
+  const [addingKeys, setAddingKeys]         = useState<Set<string>>(new Set())
+
+  async function runExtract() {
+    if (!extractUrl.trim()) return
+    setExtractLoading(true); setExtractError(null); setExtractResults(null)
+    try {
+      const res = await fetch(`/api/conferences/${conferenceId}/extract-companies`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: extractUrl.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) setExtractError(data.error || 'Failed to extract')
+      else setExtractResults(data.companies || [])
+    } catch { setExtractError('Network error') }
+    finally { setExtractLoading(false) }
+  }
+
+  async function addExtracted(c: NonNullable<typeof extractResults>[0]) {
+    setAddingKeys(prev => { const s = new Set(Array.from(prev)); s.add(c.name); return s })
+    await fetch(`/api/conferences/${conferenceId}/targets`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        company: c.name, contactName: c.contactName || undefined,
+        contactRole: c.contactRole || undefined,
+        notes: `Source: ${c.source}${c.companyType ? ` · ${c.companyType}` : ''}`,
+        priority: c.priority || 'MEDIUM',
+      }),
+    })
+    setAddingKeys(prev => { const s = new Set(prev); s.delete(c.name); return s })
+    onRefresh()
+  }
 
   async function addTarget() {
     if (!form.company) return
@@ -454,11 +496,87 @@ function TargetAccountsPanel({ conferenceId, conferenceName, targets, isManager,
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-content-primary">Target Accounts & Key People</h2>
         {isManager && (
-          <button onClick={() => setAdding(p => !p)} className="btn-primary text-xs py-1.5 px-3">
-            + Add Target
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setExtractOpen(p => !p); setAdding(false) }}
+              className="text-xs text-brand-accent border border-brand-accent/30 hover:bg-brand-accent/5 rounded-lg px-2.5 py-1.5 transition-colors"
+            >
+              ✦ Extract from URL
+            </button>
+            <button onClick={() => { setAdding(p => !p); setExtractOpen(false) }} className="btn-primary text-xs py-1.5 px-3">
+              + Add Target
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Extract-from-URL panel */}
+      {isManager && extractOpen && (
+        <div className="bg-surface-raised rounded-xl p-4 space-y-3 border border-brand-accent/20">
+          <div>
+            <p className="text-xs font-semibold text-content-primary mb-0.5">Extract companies from a conference page</p>
+            <p className="text-xs text-content-muted">Paste a sponsors, exhibitors, speakers, or agenda URL. AI will identify relevant companies.</p>
+          </div>
+          <div className="flex gap-2">
+            <input
+              className="input flex-1 text-xs"
+              placeholder="https://conference.com/sponsors"
+              value={extractUrl}
+              onChange={e => setExtractUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && runExtract()}
+            />
+            <button onClick={runExtract} disabled={extractLoading || !extractUrl.trim()} className="btn-primary text-xs py-1.5 px-3 min-w-[72px]">
+              {extractLoading ? '…' : 'Extract'}
+            </button>
+            <button onClick={() => { setExtractOpen(false); setExtractResults(null); setExtractUrl('') }} className="btn-secondary text-xs py-1.5 px-3">
+              Close
+            </button>
+          </div>
+
+          {extractError && <p className="text-xs text-red-500">{extractError}</p>}
+
+          {extractResults && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-content-primary">
+                {extractResults.length === 0 ? 'No relevant companies found on that page.' : `${extractResults.length} companies found`}
+              </p>
+              {extractResults.length > 0 && (
+                <div className="max-h-72 overflow-y-auto space-y-1">
+                  {extractResults.map(c => {
+                    const alreadyAdded = targets.some(t => t.company.toLowerCase() === c.name.toLowerCase())
+                    const isAdding = addingKeys.has(c.name)
+                    return (
+                      <div key={c.name} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-surface-border">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-medium text-content-primary truncate">{c.name}</span>
+                            <span className={`badge text-[10px] ${PRIORITY_COLORS[c.priority] || 'bg-slate-100 text-slate-500'}`}>{c.priority}</span>
+                            {c.companyType && <span className="text-[10px] text-content-muted">{c.companyType}</span>}
+                          </div>
+                          {(c.contactName || c.contactRole) && (
+                            <p className="text-[10px] text-content-muted mt-0.5">{c.contactName}{c.contactRole ? ` · ${c.contactRole}` : ''}</p>
+                          )}
+                        </div>
+                        {alreadyAdded ? (
+                          <span className="text-[10px] text-emerald-600 font-medium flex-shrink-0">✓ Added</span>
+                        ) : (
+                          <button
+                            onClick={() => addExtracted(c)}
+                            disabled={isAdding}
+                            className="text-[10px] font-medium text-brand-accent hover:text-brand-navy flex-shrink-0 transition-colors disabled:opacity-40"
+                          >
+                            {isAdding ? '…' : '+ Add'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {adding && (
         <div className="bg-surface-raised rounded-xl p-4 space-y-3 border border-surface-border">
@@ -847,8 +965,8 @@ const STATUS_LABEL: Record<string, string> = {
   MET: 'Met', FOLLOW_UP_NEEDED: 'Follow-up needed', NOT_RELEVANT: 'Not relevant', PASSED: 'Passed',
 }
 
-function MyFocusPanel({ conferenceId, assignment, attendingStatus, meetingsScheduled, targets }: {
-  conferenceId: string
+function MyFocusPanel({ conferenceId, conferenceName, assignment, attendingStatus, meetingsScheduled, targets }: {
+  conferenceId: string; conferenceName: string
   assignment: Assignment | null
   attendingStatus: string; meetingsScheduled: number
   targets: TargetAccount[]
@@ -940,6 +1058,13 @@ function MyFocusPanel({ conferenceId, assignment, attendingStatus, meetingsSched
                   <span className="ml-auto text-emerald-600 font-medium">Expected attendee</span>
                 </div>
               )}
+              <CompanyBriefPanel
+                company={t.company}
+                website={t.website}
+                contactRole={t.contactRole}
+                conferenceName={conferenceName}
+                targetId={t.id}
+              />
             </div>
           ))}
         </div>
@@ -962,8 +1087,8 @@ const SUGGESTED_ROLES = [
 
 // ── Shared Company Brief Panel ────────────────────────────────────────────────
 interface CompanyBrief {
-  whatTheyDo: string; grainRelevance: string; market: string
-  businessType: string; fxRelevance: string; keyPeople: string; salesAngle: string
+  icpSummary?: string; whatTheyDo: string; grainRelevance: string; market: string
+  businessType: string; hqLocation?: string; fxRelevance: string; keyPeople: string; salesAngle: string
 }
 
 const BRIEF_FIELDS: { key: keyof CompanyBrief; label: string; icon: string }[] = [
@@ -971,6 +1096,7 @@ const BRIEF_FIELDS: { key: keyof CompanyBrief; label: string; icon: string }[] =
   { key: 'grainRelevance', label: 'Why Grain?',       icon: '💡' },
   { key: 'market',         label: 'Market',           icon: '🌍' },
   { key: 'businessType',   label: 'B2B / B2C',        icon: '🔗' },
+  { key: 'hqLocation',     label: 'HQ',               icon: '📍' },
   { key: 'fxRelevance',    label: 'FX relevance',     icon: '💱' },
   { key: 'keyPeople',      label: 'Key people',       icon: '👤' },
   { key: 'salesAngle',     label: 'Sales angle',      icon: '🎯' },
@@ -1042,6 +1168,11 @@ function CompanyBriefPanel({ company, website, contactRole, conferenceName, targ
             <div className="flex items-center gap-2 py-1 text-xs text-content-muted">
               <div className="w-3 h-3 border border-brand-accent border-t-transparent rounded-full animate-spin" />
               Building company brief…
+            </div>
+          )}
+          {!loading && brief && brief.icpSummary && (
+            <div className="rounded-lg bg-brand-navy/5 border border-brand-navy/10 px-3 py-2 text-xs text-content-secondary">
+              <span className="font-semibold text-content-primary">⭐ </span>{brief.icpSummary}
             </div>
           )}
           {!loading && brief && BRIEF_FIELDS.map(({ key, label, icon }) =>

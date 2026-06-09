@@ -254,9 +254,11 @@ model CompanyEnrichment {
   id             String   @id @default(cuid())
   company        String   @unique  // normalized lowercase
   displayName    String            // original casing as first seen
+  icpSummary     String?           // one-liner: why relevant to Grain
   whatTheyDo     String?
   market         String?
   businessType   String?
+  hqLocation     String?           // HQ city / country
   fxRelevance    String?
   grainRelevance String?
   keyPeople      String?

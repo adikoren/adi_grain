@@ -70,19 +70,21 @@ export async function POST(req: NextRequest) {
     const websiteText = website ? await fetchWebsiteText(website) : null
     const confContext = conferenceName ? ` attending ${conferenceName}` : conferenceId ? ' at an industry conference' : ''
 
-    const systemPrompt = `You are a sales intelligence assistant at Grain, a fintech company providing FX (foreign exchange) hedging and risk management for businesses. Grain serves PSPs, payment providers, travel companies, and any business with FX exposure.
+    const systemPrompt = `You are a sales intelligence assistant at Grain, a fintech company providing FX (foreign exchange) hedging and risk management for businesses. Grain serves PSPs, payment providers, travel companies, banks, and any business with meaningful FX exposure.
 
 Your job is to produce a concise, practical company brief for a Grain sales rep before or during a meeting.
 
 Return ONLY a JSON object — no code fences, no prose before or after. Use this exact schema:
 {
-  "whatTheyDo": "One sentence: what the company does",
-  "grainRelevance": "Why this company is relevant to Grain (FX exposure, payments volume, etc.)",
+  "icpSummary": "One-line ICP assessment: e.g. 'Strong ICP fit — PSP with high cross-border volume and multi-currency settlement complexity.'",
+  "whatTheyDo": "One sentence: what the company does and who it serves",
+  "grainRelevance": "Why this company is relevant to Grain (FX exposure, payments volume, treasury complexity, etc.)",
   "market": "Primary market / industry vertical",
   "businessType": "B2B, B2C, or B2B2C",
+  "hqLocation": "HQ city and country (e.g. Amsterdam, Netherlands) or null if unknown",
   "fxRelevance": "Specific FX or multi-currency exposure at this company",
-  "keyPeople": "Roles or names to approach (e.g. CFO, Head of Treasury, VP Payments)",
-  "salesAngle": "One concrete opening line or angle for a Grain sales conversation",
+  "keyPeople": "Roles to approach (e.g. Head of Treasury, VP Payments, CFO, Head of FX)",
+  "salesAngle": "One concrete opening line or conversation angle for a Grain sales rep",
   "suggestedPerson": {
     "firstName": null,
     "lastName": null,
@@ -93,7 +95,8 @@ Return ONLY a JSON object — no code fences, no prose before or after. Use this
 }
 
 Rules:
-- Keep every field to 1-2 short sentences maximum
+- icpSummary must be a single punchy sentence explaining priority (HIGH/MEDIUM/LOW) and the main reason
+- Keep every other field to 1-2 short sentences maximum
 - suggestedPerson.firstName/lastName: only provide if you are confident from training data — otherwise null
 - Do NOT add any text outside the JSON object`
 
@@ -154,9 +157,11 @@ Generate a Company Brief for a Grain sales rep.`
       create: {
         company: key,
         displayName: company,
+        icpSummary:     suggestions.icpSummary     || null,
         whatTheyDo:     suggestions.whatTheyDo     || null,
         market:         suggestions.market         || null,
         businessType:   suggestions.businessType   || null,
+        hqLocation:     suggestions.hqLocation     || null,
         fxRelevance:    suggestions.fxRelevance    || null,
         grainRelevance: suggestions.grainRelevance || null,
         keyPeople:      suggestions.keyPeople      || null,
@@ -167,9 +172,11 @@ Generate a Company Brief for a Grain sales rep.`
         lastEnrichedAt: new Date(),
       },
       update: {
+        icpSummary:     suggestions.icpSummary     || null,
         whatTheyDo:     suggestions.whatTheyDo     || null,
         market:         suggestions.market         || null,
         businessType:   suggestions.businessType   || null,
+        hqLocation:     suggestions.hqLocation     || null,
         fxRelevance:    suggestions.fxRelevance    || null,
         grainRelevance: suggestions.grainRelevance || null,
         keyPeople:      suggestions.keyPeople      || null,

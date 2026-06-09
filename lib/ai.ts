@@ -125,6 +125,64 @@ Website: ${conf.website || 'N/A'}`
   }
 }
 
+// ── Feature: Conference company extraction ────────────────────────────────────
+
+export async function extractConferenceCompanies(
+  pageContent: string,
+  conferenceName: string
+): Promise<Array<{
+  name: string
+  website: string | null
+  contactName: string | null
+  contactRole: string | null
+  priority: 'HIGH' | 'MEDIUM' | 'LOW'
+  companyType: string | null
+  source: string
+}>> {
+  const system = `You are a sales intelligence analyst at Grain, a fintech company providing FX hedging and risk management for businesses with currency exposure.
+
+Extract companies from conference sponsor, exhibitor, speaker, or agenda content that are relevant to Grain.
+
+Grain's target customers:
+- Payment Service Providers (PSPs) with cross-border flows
+- Banks, broker-dealers, FX venues
+- Treasury-heavy corporates with global operations
+- Fintechs with multi-currency products or embedded FX
+- Travel companies, remittance companies
+- Companies with significant FX risk
+
+Return a JSON array (max 25 items). Each item:
+{
+  "name": "Company display name",
+  "website": "URL or null",
+  "contactName": "Person name if mentioned, or null",
+  "contactRole": "Job title if mentioned, or null",
+  "priority": "HIGH | MEDIUM | LOW",
+  "companyType": "PSP | Bank | Fintech | Corporate | Travel | Remittance | Other",
+  "source": "sponsor | exhibitor | speaker | agenda | partner"
+}
+
+Priority rules:
+- HIGH: PSP, cross-border payment company, bank/broker, FX venue, treasury corporate, fintech with multi-currency or hedging
+- MEDIUM: Fintech with international operations, marketplace, travel company, asset manager with FX exposure
+- LOW: Technology vendor, consultancy, regulator, media/events company
+
+Only extract companies explicitly mentioned in the content. Do not invent entries. If a company appears multiple times, include it once.`
+
+  try {
+    const raw = await callLLM(
+      `Conference: ${conferenceName}\n\nPage content:\n${pageContent.slice(0, 10000)}`,
+      system
+    )
+    const cleaned = raw.replace(/```json|```/g, '').trim()
+    const match = cleaned.match(/\[[\s\S]*\]/)
+    if (!match) return []
+    return JSON.parse(match[0])
+  } catch {
+    return []
+  }
+}
+
 // ── Feature: Conference discovery (AI + web content) ─────────────────────────
 
 export async function discoverConferences(pageContent: string): Promise<
