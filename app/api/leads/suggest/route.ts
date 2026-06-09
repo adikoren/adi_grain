@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 
+const CACHE_DAYS = 30
+
 async function fetchWebsiteText(url: string): Promise<string | null> {
   try {
     const controller = new AbortController()
@@ -21,7 +23,6 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 3000)
-    // Discard WAF/bot-block pages (too short or known block patterns)
     if (!text || text.length < 200 || /incident id|cloudflare|access denied|captcha/i.test(text)) return null
     return text
   } catch {
@@ -29,23 +30,35 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
   }
 }
 
+function isFresh(date: Date): boolean {
+  return (Date.now() - date.getTime()) < CACHE_DAYS * 24 * 60 * 60 * 1000
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { company, jobTitle, conferenceId, conferenceName, website } = await req.json()
+  const key = company.toLowerCase().trim()
 
+  // ── Check DB cache first ──────────────────────────────────────────────────
+  const cached = await db.companyEnrichment.findUnique({ where: { company: key } })
+  if (cached && isFresh(cached.lastEnrichedAt)) {
+    return NextResponse.json({ suggestions: cached, source: 'cache' })
+  }
+
+  // ── Need to generate ──────────────────────────────────────────────────────
   const cfg = await db.systemConfig.findUnique({ where: { id: 'singleton' } })
   const provider = cfg?.aiProvider || 'OPENAI'
   const apiKey = cfg?.aiApiKey || null
 
   if (!apiKey) {
+    // Return cached (even if stale) rather than showing an error when key is missing
+    if (cached) return NextResponse.json({ suggestions: cached, source: 'stale_cache' })
     return NextResponse.json({ suggestions: null, reason: 'no_key' })
   }
 
-  // Fetch company website in parallel with building the prompt
   const websiteText = website ? await fetchWebsiteText(website) : null
-
   const confContext = conferenceName ? ` attending ${conferenceName}` : conferenceId ? ' at an industry conference' : ''
 
   const systemPrompt = `You are a sales intelligence assistant at Grain, a fintech company providing FX (foreign exchange) hedging and risk management for businesses. Grain serves PSPs, payment providers, travel companies, and any business with FX exposure.
@@ -90,11 +103,7 @@ Generate a Company Brief for a Grain sales rep.`
     if (provider === 'ANTHROPIC') {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 600,
@@ -106,19 +115,12 @@ Generate a Company Brief for a Grain sales rep.`
       if (!res.ok) throw new Error(data.error?.message || 'Anthropic API error')
       raw = data.content[0].text
     } else {
-      // Default: OpenAI
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt },
-          ],
+          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }],
           max_tokens: 600,
         }),
       })
@@ -127,12 +129,46 @@ Generate a Company Brief for a Grain sales rep.`
       raw = data.choices[0].message.content
     }
 
-    // Extract the JSON object — guard against any trailing prose
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) throw new Error('No JSON object in AI response')
     const suggestions = JSON.parse(jsonMatch[0])
-    return NextResponse.json({ suggestions })
+
+    // ── Persist to DB ─────────────────────────────────────────────────────
+    await db.companyEnrichment.upsert({
+      where: { company: key },
+      create: {
+        company: key,
+        displayName: company,
+        whatTheyDo:     suggestions.whatTheyDo     || null,
+        market:         suggestions.market         || null,
+        businessType:   suggestions.businessType   || null,
+        fxRelevance:    suggestions.fxRelevance    || null,
+        grainRelevance: suggestions.grainRelevance || null,
+        keyPeople:      suggestions.keyPeople      || null,
+        salesAngle:     suggestions.salesAngle     || null,
+        website:        website || null,
+        dataSource:     provider === 'ANTHROPIC' ? 'AI_ANTHROPIC' : 'AI_OPENAI',
+        confidence:     'HIGH',
+        lastEnrichedAt: new Date(),
+      },
+      update: {
+        whatTheyDo:     suggestions.whatTheyDo     || null,
+        market:         suggestions.market         || null,
+        businessType:   suggestions.businessType   || null,
+        fxRelevance:    suggestions.fxRelevance    || null,
+        grainRelevance: suggestions.grainRelevance || null,
+        keyPeople:      suggestions.keyPeople      || null,
+        salesAngle:     suggestions.salesAngle     || null,
+        website:        website || undefined,
+        dataSource:     provider === 'ANTHROPIC' ? 'AI_ANTHROPIC' : 'AI_OPENAI',
+        confidence:     'HIGH',
+        lastEnrichedAt: new Date(),
+      },
+    })
+
+    return NextResponse.json({ suggestions, source: 'ai' })
   } catch (err) {
+    if (cached) return NextResponse.json({ suggestions: cached, source: 'stale_cache' })
     return NextResponse.json({ suggestions: null, reason: 'ai_error', error: String(err) })
   }
 }

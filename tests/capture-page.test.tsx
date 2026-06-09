@@ -700,9 +700,10 @@ describe('CapturePage — company autocomplete', () => {
 
   it('person suggestion card appears when URL has both company and jobTitle', async () => {
     mockSearchParams = new URLSearchParams('company=Stripe&jobTitle=CFO')
-    mockFetch.mockImplementation(async (url: string, opts?: any) => {
-      if (url.includes('/api/leads/suggest')) return { ok: true, json: async () => ({
-        suggestions: { suggestedPerson: { firstName: 'Jane', lastName: 'Doe', confidence: 'high', reasoning: 'Known CFO at Stripe', linkedinHint: null } }
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.includes('/api/leads/suggest-person')) return { ok: true, json: async () => ({
+        person: { firstName: 'Jane', lastName: 'Doe', confidence: 'high', reasoning: 'Known CFO at Stripe', linkedinHint: null, previousContext: null, warmth: null },
+        source: 'ai',
       })}
       if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: ['Stripe'] }) }
       if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads: [] }) }
@@ -717,9 +718,10 @@ describe('CapturePage — company autocomplete', () => {
   it('accepting person suggestion fills firstName and lastName', async () => {
     const user = userEvent.setup()
     mockSearchParams = new URLSearchParams('company=Adyen&jobTitle=CFO')
-    mockFetch.mockImplementation(async (url: string, opts?: any) => {
-      if (url.includes('/api/leads/suggest')) return { ok: true, json: async () => ({
-        suggestions: { suggestedPerson: { firstName: 'Tom', lastName: 'Wilson', confidence: 'medium', reasoning: 'Likely CFO at Adyen', linkedinHint: null } }
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.includes('/api/leads/suggest-person')) return { ok: true, json: async () => ({
+        person: { firstName: 'Tom', lastName: 'Wilson', confidence: 'medium', reasoning: 'Likely CFO at Adyen', linkedinHint: null, previousContext: null, warmth: null },
+        source: 'ai',
       })}
       if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: [] }) }
       if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads: [] }) }
@@ -738,9 +740,10 @@ describe('CapturePage — company autocomplete', () => {
   it('dismissing person suggestion removes the card', async () => {
     const user = userEvent.setup()
     mockSearchParams = new URLSearchParams('company=Revolut&jobTitle=COO')
-    mockFetch.mockImplementation(async (url: string, opts?: any) => {
-      if (url.includes('/api/leads/suggest')) return { ok: true, json: async () => ({
-        suggestions: { suggestedPerson: { firstName: 'Anna', lastName: 'Keller', confidence: 'low', reasoning: 'Possible COO', linkedinHint: null } }
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.includes('/api/leads/suggest-person')) return { ok: true, json: async () => ({
+        person: { firstName: 'Anna', lastName: 'Keller', confidence: 'low', reasoning: 'Possible COO', linkedinHint: null, previousContext: null, warmth: null },
+        source: 'ai',
       })}
       if (url.includes('/api/leads/companies')) return { ok: true, json: async () => ({ companies: [] }) }
       if (url.includes('/api/leads')) return { ok: true, json: async () => ({ leads: [] }) }

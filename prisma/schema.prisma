@@ -195,11 +195,12 @@ model Lead {
   aiSummaryAt        DateTime?
   relationshipStatus String?
 
-  capturedBy  User             @relation(fields: [capturedById], references: [id])
-  conferences ConferenceLead[]
-  matchesA    ContactMatch[]   @relation("MatchA")
-  matchesB    ContactMatch[]   @relation("MatchB")
-  syncLogs    HubspotSyncLog[]
+  capturedBy         User               @relation(fields: [capturedById], references: [id])
+  conferences        ConferenceLead[]
+  matchesA           ContactMatch[]     @relation("MatchA")
+  matchesB           ContactMatch[]     @relation("MatchB")
+  syncLogs           HubspotSyncLog[]
+  personEnrichments  PersonEnrichment[]
 }
 
 model ConferenceLead {
@@ -240,3 +241,47 @@ model HubspotSyncLog {
 
   lead Lead @relation(fields: [leadId], references: [id])
 }
+
+// Global company knowledge layer — shared across all conferences
+model CompanyEnrichment {
+  id             String   @id @default(cuid())
+  company        String   @unique  // normalized lowercase
+  displayName    String            // original casing as first seen
+  whatTheyDo     String?
+  market         String?
+  businessType   String?
+  fxRelevance    String?
+  grainRelevance String?
+  keyPeople      String?
+  salesAngle     String?
+  website        String?
+  dataSource     String   @default("AI")
+  confidence     String   @default("MEDIUM")
+  lastEnrichedAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Person-level enrichment — stored per (company, jobTitle) pair
+model PersonEnrichment {
+  id              String   @id @default(cuid())
+  company         String            // normalized lowercase
+  jobTitle        String            // normalized lowercase
+  firstName       String?
+  lastName        String?
+  linkedinUrl     String?
+  summary         String?
+  warmth          String?           // WARM | COLD | QUALIFIED
+  previousContext String?           // filled when matched to internal lead
+  dataSource      String   @default("AI")
+  confidence      String   @default("MEDIUM")  // HIGH | MEDIUM | LOW
+  matchedLeadId   String?           // linked to existing Lead when recognized internally
+  lastEnrichedAt  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  matchedLead     Lead?    @relation(fields: [matchedLeadId], references: [id])
+
+  @@unique([company, jobTitle])
+}
+
