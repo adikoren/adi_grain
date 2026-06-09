@@ -52,7 +52,7 @@ RUN md5sum /app/prisma/schema.prisma | awk '{print $1}' > /app/prisma/seed-templ
 
 # ── Stage 4: Production runner ────────────────────────────────────────────────
 FROM node:20-alpine AS runner
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl sqlite
 WORKDIR /app
 
 ENV NODE_ENV=production

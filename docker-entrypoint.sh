@@ -17,7 +17,7 @@ TEMPLATE_VERSION=$(cat /app/prisma/seed-template.version 2>/dev/null || echo "un
 CURRENT_VERSION=$(cat "$VERSION_PATH" 2>/dev/null || echo "")
 
 if [ ! -f "$DB_PATH" ]; then
-  echo "First run — loading demo database (schema v${TEMPLATE_VERSION})..."
+  echo "No database found — loading demo database (schema v${TEMPLATE_VERSION})..."
   mkdir -p "$(dirname "$DB_PATH")"
   cp /app/prisma/seed-template.db "$DB_PATH"
   echo "$TEMPLATE_VERSION" > "$VERSION_PATH"
@@ -27,6 +27,11 @@ elif [ "$TEMPLATE_VERSION" != "$CURRENT_VERSION" ]; then
   cp /app/prisma/seed-template.db "$DB_PATH"
   echo "$TEMPLATE_VERSION" > "$VERSION_PATH"
   echo "Demo data reset."
+elif ! sqlite3 "$DB_PATH" "SELECT 1 FROM User LIMIT 1;" 2>/dev/null | grep -q 1; then
+  echo "Database is empty — loading demo database (schema v${TEMPLATE_VERSION})..."
+  cp /app/prisma/seed-template.db "$DB_PATH"
+  echo "$TEMPLATE_VERSION" > "$VERSION_PATH"
+  echo "Demo data ready."
 else
   echo "Database up to date (schema v${TEMPLATE_VERSION})."
 fi
