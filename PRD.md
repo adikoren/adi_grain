@@ -1,5 +1,5 @@
 # Product Requirements Document
-## Conference Intelligence Tool — Grain Sales Team
+## Conference Intelligence Tool
 
 **Version:** 1.1  
 **Date:** 2026-06-07  
@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-A web-based Conference Intelligence Tool that helps Grain's sales team decide which conferences to attend, plan coverage, capture leads in the field, track relationships across events, and sync to HubSpot. Built for simplicity: one repo, SQLite file, deployable to Vercel with zero infrastructure overhead.
+A web-based Conference Intelligence Tool that helps a fintech sales team decide which conferences to attend, plan coverage, capture leads in the field, track relationships across events, and sync to HubSpot. Built for simplicity: one repo, SQLite file, deployable to Vercel with zero infrastructure overhead.
 
 **Target Users:** Admin, Sales Managers, Sales Representatives  
 **Primary ICP Focus:** Fintech, Payments, FX/Treasury, Travel wholesalers
@@ -19,34 +19,31 @@ A web-based Conference Intelligence Tool that helps Grain's sales team decide wh
 ## 2. Branding & Design
 
 ### 2.1 Source
-Brand identity pulled from [grainfinance.com](https://www.grainfinance.com/).
+Neutral placeholder identity — "CI" wordmark, no external brand reference.
 
 ### 2.2 Logo
-- White SVG wordmark "Grain" on dark backgrounds.
-- Logo asset: `https://static.wixstatic.com/media/4bced4_d18498f58d6a4e87a687b8fd19654d69~mv2.png`
-- OG reference image: `https://static.wixstatic.com/media/4bced4_d1b65cdb19844fb29253bf3235765250~mv2.png`
-- App uses the Grain wordmark in the top-left of the nav and on the login screen.
+- White "CI" text wordmark on dark backgrounds.
+- Used in the top-left of the nav and on the login screen.
 
 ### 2.3 Color Palette
-Derived from grainfinance.com visual identity:
 
 | Token | Value | Usage |
 |---|---|---|
 | `brand-dark` | `#0A0E1A` | Page backgrounds, nav bar |
 | `brand-navy` | `#111827` | Card backgrounds, sidebar |
-| `brand-accent` | `#4ADE80` | CTAs, active states, badges (green from Grain palette) |
+| `brand-accent` | `#4ADE80` | CTAs, active states, badges |
 | `brand-accent-alt` | `#6366F1` | Secondary accent (ICP scores, AI features) |
 | `text-primary` | `#F9FAFB` | Primary text on dark |
 | `text-muted` | `#9CA3AF` | Secondary text, labels |
 | `border` | `#1F2937` | Card borders, dividers |
 
 ### 2.4 Typography
-- Font: `Inter` (Google Fonts) — matches Grain's clean, modern fintech style.
+- Font: `Inter` (Google Fonts) — clean, modern fintech style.
 - Headings: `font-semibold`, `tracking-tight`.
 - Body: `font-normal`, `text-sm` / `text-base`.
 
 ### 2.5 UI Tone
-- Dark-first theme (matches Grain's dark dashboard aesthetic).
+- Dark-first theme.
 - Minimal chrome — content first.
 - Green accent (`brand-accent`) used sparingly for high-signal actions (capture lead, sync to HubSpot, confirm assignment).
 
@@ -348,7 +345,7 @@ enum SyncStatus { PENDING SUCCESS FAILED }
 ## 7. Screens & Features
 
 ### 7.1 Shared: App Shell
-- **Top nav:** Grain logo (white wordmark on `brand-dark` bg), current-conference pill, user avatar + role badge.
+- **Top nav:** "CI" logo (white wordmark on `brand-dark` bg), current-conference pill, user avatar + role badge.
 - **Sidebar:** Role-aware nav links, collapses to bottom tab bar on mobile.
 - **Theme:** Dark throughout. Green accent for primary actions.
 
@@ -356,7 +353,7 @@ enum SyncStatus { PENDING SUCCESS FAILED }
 
 ### 7.2 Login Page (`/login`)
 
-Split layout — left panel: Grain logo + tagline. Right panel: auth forms.
+Split layout — left panel: "CI" logo + tagline. Right panel: auth forms.
 
 **Tab 1 — Log In**
 - Email + Password fields.
@@ -664,7 +661,7 @@ Money20/20 USA & Europe, Sibos, FinovateEurope, FinovateSpring, SWIFT Business F
 - [ ] Manager analytics dashboard
 - [ ] Contact match resolution queue
 - [ ] Admin settings page (AI key, HubSpot key)
-- [ ] Grain branding (dark theme, logo, colors)
+- [ ] Neutral branding (dark theme, logo, colors)
 - [ ] Mobile nav (bottom tabs)
 - [ ] Demo seed walkthrough prep
 

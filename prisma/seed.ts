@@ -50,36 +50,36 @@ async function main() {
 
   // ── Users ─────────────────────────────────────────────────────────────────
   const hash = await bcrypt.hash('admin', 10)
-  const repHash = await bcrypt.hash('grain123', 10)
+  const repHash = await bcrypt.hash('intel123', 10)
 
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@grain.internal' },
+    where: { email: 'admin@conferenceintel.internal' },
     update: {},
-    create: { email: 'admin@grain.internal', name: 'Admin', passwordHash: hash, role: 'ADMIN', isActive: true },
+    create: { email: 'admin@conferenceintel.internal', name: 'Admin', passwordHash: hash, role: 'ADMIN', isActive: true },
   })
 
   const alexKim = await prisma.user.upsert({
-    where: { email: 'alex.kim@grain.internal' },
+    where: { email: 'alex.kim@conferenceintel.internal' },
     update: {},
-    create: { email: 'alex.kim@grain.internal', name: 'Alex Kim', passwordHash: repHash, role: 'MANAGER', isActive: true },
+    create: { email: 'alex.kim@conferenceintel.internal', name: 'Alex Kim', passwordHash: repHash, role: 'MANAGER', isActive: true },
   })
 
   const sarahChen = await prisma.user.upsert({
-    where: { email: 'sarah.chen@grain.internal' },
+    where: { email: 'sarah.chen@conferenceintel.internal' },
     update: {},
-    create: { email: 'sarah.chen@grain.internal', name: 'Sarah Chen', passwordHash: repHash, role: 'SALES_PERSON', isActive: true },
+    create: { email: 'sarah.chen@conferenceintel.internal', name: 'Sarah Chen', passwordHash: repHash, role: 'SALES_PERSON', isActive: true },
   })
 
   const jakeMartinez = await prisma.user.upsert({
-    where: { email: 'jake.martinez@grain.internal' },
+    where: { email: 'jake.martinez@conferenceintel.internal' },
     update: {},
-    create: { email: 'jake.martinez@grain.internal', name: 'Jake Martinez', passwordHash: repHash, role: 'SALES_PERSON', isActive: true },
+    create: { email: 'jake.martinez@conferenceintel.internal', name: 'Jake Martinez', passwordHash: repHash, role: 'SALES_PERSON', isActive: true },
   })
 
   const priyaNair = await prisma.user.upsert({
-    where: { email: 'priya.nair@grain.internal' },
+    where: { email: 'priya.nair@conferenceintel.internal' },
     update: {},
-    create: { email: 'priya.nair@grain.internal', name: 'Priya Nair', passwordHash: repHash, role: 'SALES_PERSON', isActive: true },
+    create: { email: 'priya.nair@conferenceintel.internal', name: 'Priya Nair', passwordHash: repHash, role: 'SALES_PERSON', isActive: true },
   })
 
   console.log('✓ Users created (admin / alex.kim / sarah.chen / jake.martinez / priya.nair)')
@@ -151,7 +151,7 @@ async function main() {
     { confName: 'FX Week Europe', company: 'HSBC', contactName: 'James Whitfield', contactRole: 'Global Head of FX', priority: 'HIGH', status: 'TO_MEET', notes: 'Core ICP — massive FX volumes, potential enterprise deal.' },
     { confName: 'FX Week Europe', company: 'Barclays', contactName: 'Natasha Armstrong', contactRole: 'Director, FX Trading', priority: 'HIGH', status: 'REACHED_OUT', notes: 'Evaluating risk management tools. Strong FX pain.' },
     { confName: 'FX Week Europe', company: 'Deutsche Bank', contactName: 'Karl Becker', contactRole: 'MD, FX Structuring', priority: 'HIGH', status: 'TO_MEET', notes: 'Met at EuroFinance 2024 — follow up on proposal.' },
-    { confName: 'FX Week Europe', company: 'Standard Chartered', contactName: 'Mei Lin', contactRole: 'Head of EM FX', priority: 'MEDIUM', status: 'TO_MEET', notes: 'Emerging markets FX — strong alignment with Grain.' },
+    { confName: 'FX Week Europe', company: 'Standard Chartered', contactName: 'Mei Lin', contactRole: 'Head of EM FX', priority: 'MEDIUM', status: 'TO_MEET', notes: 'Emerging markets FX — strong alignment with us.' },
     { confName: 'FX Week Europe', company: 'BNP Paribas', contactName: 'Pierre Leclerc', contactRole: 'Head of Corporate FX', priority: 'MEDIUM', status: 'TO_MEET', notes: 'Reviewing corporate hedging solutions.' },
 
     // EuroFinance International Treasury
@@ -211,9 +211,9 @@ async function main() {
       icpScore: 92, tags: ['fx_pain', 'decision_maker', 'champion'],
       hubspotContactId: 'hs_001_tom_muller',
       appearances: [
-        { confName: 'FX Week Europe 2024', capturedBy: 'sarah.chen@grain.internal', date: '2024-09-09', notes: 'Strong FX pain. Wants to see hedging automation demo. Follow up in Q1.' },
-        { confName: 'EuroFinance 2025', capturedBy: 'sarah.chen@grain.internal', date: '2025-09-18', notes: 'Relationship warming. Asked for a pilot proposal. Grain mentioned by 2 other contacts.' },
-        { confName: 'Money20/20 Europe 2025', capturedBy: 'sarah.chen@grain.internal', date: '2025-06-03', notes: 'Confirmed pilot interest. Introduced to their CFO. Deal stage: Evaluation.' },
+        { confName: 'FX Week Europe 2024', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2024-09-09', notes: 'Strong FX pain. Wants to see hedging automation demo. Follow up in Q1.' },
+        { confName: 'EuroFinance 2025', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2025-09-18', notes: 'Relationship warming. Asked for a pilot proposal. We were mentioned by 2 other contacts.' },
+        { confName: 'Money20/20 Europe 2025', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2025-06-03', notes: 'Confirmed pilot interest. Introduced to their CFO. Deal stage: Evaluation.' },
       ],
     },
     {
@@ -222,8 +222,8 @@ async function main() {
       icpScore: 95, tags: ['fx_pain', 'decision_maker', 'demo_requested'],
       hubspotContactId: 'hs_002_rachel_goldstein',
       appearances: [
-        { confName: 'EuroFinance 2024', capturedBy: 'sarah.chen@grain.internal', date: '2024-09-19', notes: 'Manages €2B+ FX. Interested in real-time hedging. Asked us to send a one-pager.' },
-        { confName: 'Money20/20 Europe 2025', capturedBy: 'sarah.chen@grain.internal', date: '2025-06-02', notes: 'Requested live demo after seeing our stand. Very engaged — buying signals clear.' },
+        { confName: 'EuroFinance 2024', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2024-09-19', notes: 'Manages €2B+ FX. Interested in real-time hedging. Asked us to send a one-pager.' },
+        { confName: 'Money20/20 Europe 2025', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2025-06-02', notes: 'Requested live demo after seeing our stand. Very engaged — buying signals clear.' },
       ],
     },
     {
@@ -232,8 +232,8 @@ async function main() {
       icpScore: 88, tags: ['fx_pain', 'decision_maker'],
       hubspotContactId: 'hs_003_daniel_cohen',
       appearances: [
-        { confName: 'FinTech Connect 2024', capturedBy: 'jake.martinez@grain.internal', date: '2024-11-27', notes: 'CFO of Flywire — education & healthcare payments. Significant FX complexity. Now at Stripe.' },
-        { confName: 'Money20/20 USA 2024', capturedBy: 'jake.martinez@grain.internal', date: '2024-10-28', notes: 'Quick intro at our booth. Followed up post-conference. Warm lead.' },
+        { confName: 'FinTech Connect 2024', capturedBy: 'jake.martinez@conferenceintel.internal', date: '2024-11-27', notes: 'CFO of Flywire — education & healthcare payments. Significant FX complexity. Now at Stripe.' },
+        { confName: 'Money20/20 USA 2024', capturedBy: 'jake.martinez@conferenceintel.internal', date: '2024-10-28', notes: 'Quick intro at our booth. Followed up post-conference. Warm lead.' },
       ],
     },
     {
@@ -242,8 +242,8 @@ async function main() {
       icpScore: 90, tags: ['fx_pain', 'decision_maker', 'needs_followup', 'NEEDS_REVIEW'],
       hubspotContactId: null,
       appearances: [
-        { confName: 'AFP Annual Conference 2024', capturedBy: 'jake.martinez@grain.internal', date: '2024-10-21', notes: 'Airbnb VP Finance. Heavy cross-border FX. Said current solution "barely works".' },
-        { confName: 'Money20/20 USA 2024', capturedBy: 'jake.martinez@grain.internal', date: '2024-10-29', notes: 'Second meeting — more in depth. Intro\'d us to their treasury analyst. Still evaluating 2 competitors.' },
+        { confName: 'AFP Annual Conference 2024', capturedBy: 'jake.martinez@conferenceintel.internal', date: '2024-10-21', notes: 'Airbnb VP Finance. Heavy cross-border FX. Said current solution "barely works".' },
+        { confName: 'Money20/20 USA 2024', capturedBy: 'jake.martinez@conferenceintel.internal', date: '2024-10-29', notes: 'Second meeting — more in depth. Intro\'d us to their treasury analyst. Still evaluating 2 competitors.' },
       ],
     },
     {
@@ -252,8 +252,8 @@ async function main() {
       icpScore: 94, tags: ['fx_pain', 'decision_maker', 'champion'],
       hubspotContactId: 'hs_005_priya_sharma',
       appearances: [
-        { confName: 'Paris Fintech Forum 2025', capturedBy: 'sarah.chen@grain.internal', date: '2025-01-28', notes: 'Revolut CFO — scaling FX ops to handle 100+ currencies. Champion identified.' },
-        { confName: 'Money20/20 Europe 2025', capturedBy: 'sarah.chen@grain.internal', date: '2025-06-04', notes: 'Third touchpoint. Revolut are shortlisting 2 vendors including Grain. Wants commercial proposal.' },
+        { confName: 'Paris Fintech Forum 2025', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2025-01-28', notes: 'Revolut CFO — scaling FX ops to handle 100+ currencies. Champion identified.' },
+        { confName: 'Money20/20 Europe 2025', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2025-06-04', notes: 'Third touchpoint. Revolut are shortlisting 2 vendors, including us. Wants commercial proposal.' },
       ],
     },
     {
@@ -262,8 +262,8 @@ async function main() {
       icpScore: 82, tags: ['fx_pain', 'needs_followup', 'NEEDS_REVIEW'],
       hubspotContactId: null,
       appearances: [
-        { confName: 'FX Week Europe 2024', capturedBy: 'sarah.chen@grain.internal', date: '2024-09-10', notes: 'Deutsche Bank — corporate FX structuring desk. Sees opportunity for automation.' },
-        { confName: 'EuroFinance 2025', capturedBy: 'sarah.chen@grain.internal', date: '2025-09-17', notes: 'Reconnected. Still interested but procurement process is slow. Q1 2026 target.' },
+        { confName: 'FX Week Europe 2024', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2024-09-10', notes: 'Deutsche Bank — corporate FX structuring desk. Sees opportunity for automation.' },
+        { confName: 'EuroFinance 2025', capturedBy: 'sarah.chen@conferenceintel.internal', date: '2025-09-17', notes: 'Reconnected. Still interested but procurement process is slow. Q1 2026 target.' },
       ],
     },
   ]
@@ -271,27 +271,27 @@ async function main() {
   // Fresh leads (single conference appearances)
   const freshLeads = [
     // Money20/20 USA 2024
-    { firstName: 'Jennifer', lastName: 'Park', email: 'j.park@nuvei.com', company: 'Nuvei', jobTitle: 'Head of Financial Operations', icpScore: 85, tags: ['fx_pain', 'needs_followup'], conf: 'Money20/20 USA 2024', rep: 'jake.martinez@grain.internal', date: '2024-10-27', notes: 'PSP with heavy multi-currency complexity. Intro\'d by Daniel Cohen.', hubspot: 'hs_010' },
-    { firstName: 'Carlos', lastName: 'Mendez', email: 'c.mendez@onafranca.com', company: 'ONA Franca', jobTitle: 'CEO', icpScore: 60, tags: ['tire_kicker'], conf: 'Money20/20 USA 2024', rep: 'jake.martinez@grain.internal', date: '2024-10-28', notes: 'Small startup — not ICP. Interested in a partnership, not a purchase.', hubspot: null },
-    { firstName: 'Sarah', lastName: 'Okonkwo', email: 's.okonkwo@flutterwave.com', company: 'Flutterwave', jobTitle: 'VP Treasury', icpScore: 88, tags: ['fx_pain', 'decision_maker'], conf: 'Money20/20 USA 2024', rep: 'priya.nair@grain.internal', date: '2024-10-29', notes: 'Africa-focused PSP with major FX flows. VP of Treasury.', hubspot: 'hs_011' },
+    { firstName: 'Jennifer', lastName: 'Park', email: 'j.park@nuvei.com', company: 'Nuvei', jobTitle: 'Head of Financial Operations', icpScore: 85, tags: ['fx_pain', 'needs_followup'], conf: 'Money20/20 USA 2024', rep: 'jake.martinez@conferenceintel.internal', date: '2024-10-27', notes: 'PSP with heavy multi-currency complexity. Intro\'d by Daniel Cohen.', hubspot: 'hs_010' },
+    { firstName: 'Carlos', lastName: 'Mendez', email: 'c.mendez@onafranca.com', company: 'ONA Franca', jobTitle: 'CEO', icpScore: 60, tags: ['tire_kicker'], conf: 'Money20/20 USA 2024', rep: 'jake.martinez@conferenceintel.internal', date: '2024-10-28', notes: 'Small startup — not ICP. Interested in a partnership, not a purchase.', hubspot: null },
+    { firstName: 'Sarah', lastName: 'Okonkwo', email: 's.okonkwo@flutterwave.com', company: 'Flutterwave', jobTitle: 'VP Treasury', icpScore: 88, tags: ['fx_pain', 'decision_maker'], conf: 'Money20/20 USA 2024', rep: 'priya.nair@conferenceintel.internal', date: '2024-10-29', notes: 'Africa-focused PSP with major FX flows. VP of Treasury.', hubspot: 'hs_011' },
     // EuroFinance 2024
-    { firstName: 'Hans', lastName: 'Schneider', email: 'h.schneider@siemens.com', company: 'Siemens', jobTitle: 'Head of FX Risk Management', icpScore: 90, tags: ['fx_pain', 'decision_maker', 'demo_requested'], conf: 'EuroFinance 2024', rep: 'sarah.chen@grain.internal', date: '2024-09-18', notes: 'Siemens HQ — manages billions in FX risk. Requested a product demo for October.', hubspot: 'hs_012' },
-    { firstName: 'Isabella', lastName: 'Rossi', email: 'i.rossi@enel.com', company: 'Enel', jobTitle: 'Group Treasury', icpScore: 78, tags: ['fx_pain', 'NEEDS_REVIEW'], conf: 'EuroFinance 2024', rep: 'sarah.chen@grain.internal', date: '2024-09-19', notes: 'Italian energy giant. FX exposure across LatAm operations.', hubspot: null },
+    { firstName: 'Hans', lastName: 'Schneider', email: 'h.schneider@siemens.com', company: 'Siemens', jobTitle: 'Head of FX Risk Management', icpScore: 90, tags: ['fx_pain', 'decision_maker', 'demo_requested'], conf: 'EuroFinance 2024', rep: 'sarah.chen@conferenceintel.internal', date: '2024-09-18', notes: 'Siemens HQ — manages billions in FX risk. Requested a product demo for October.', hubspot: 'hs_012' },
+    { firstName: 'Isabella', lastName: 'Rossi', email: 'i.rossi@enel.com', company: 'Enel', jobTitle: 'Group Treasury', icpScore: 78, tags: ['fx_pain', 'NEEDS_REVIEW'], conf: 'EuroFinance 2024', rep: 'sarah.chen@conferenceintel.internal', date: '2024-09-19', notes: 'Italian energy giant. FX exposure across LatAm operations.', hubspot: null },
     // AFP 2024
-    { firstName: 'Robert', lastName: 'Thompson', email: 'r.thompson@caterpillar.com', company: 'Caterpillar', jobTitle: 'Assistant Treasurer', icpScore: 83, tags: ['fx_pain', 'needs_followup'], conf: 'AFP Annual Conference 2024', rep: 'jake.martinez@grain.internal', date: '2024-10-22', notes: 'Global manufacturing — FX hedging across 50+ countries. Sent follow-up deck.', hubspot: 'hs_013' },
-    { firstName: 'Linda', lastName: 'Foster', email: 'l.foster@hp.com', company: 'HP Inc', jobTitle: 'Head of Treasury Risk', icpScore: 87, tags: ['fx_pain', 'decision_maker', 'demo_requested'], conf: 'AFP Annual Conference 2024', rep: 'jake.martinez@grain.internal', date: '2024-10-23', notes: 'Active RFP for TMS. Grain shortlisted. Demo booked.', hubspot: 'hs_014' },
+    { firstName: 'Robert', lastName: 'Thompson', email: 'r.thompson@caterpillar.com', company: 'Caterpillar', jobTitle: 'Assistant Treasurer', icpScore: 83, tags: ['fx_pain', 'needs_followup'], conf: 'AFP Annual Conference 2024', rep: 'jake.martinez@conferenceintel.internal', date: '2024-10-22', notes: 'Global manufacturing — FX hedging across 50+ countries. Sent follow-up deck.', hubspot: 'hs_013' },
+    { firstName: 'Linda', lastName: 'Foster', email: 'l.foster@hp.com', company: 'HP Inc', jobTitle: 'Head of Treasury Risk', icpScore: 87, tags: ['fx_pain', 'decision_maker', 'demo_requested'], conf: 'AFP Annual Conference 2024', rep: 'jake.martinez@conferenceintel.internal', date: '2024-10-23', notes: 'Active RFP for TMS. We were shortlisted. Demo booked.', hubspot: 'hs_014' },
     // FinTech Connect 2024
-    { firstName: 'Amelia', lastName: 'Hughes', email: 'a.hughes@zopa.com', company: 'Zopa', jobTitle: 'CFO', icpScore: 72, tags: ['needs_followup'], conf: 'FinTech Connect 2024', rep: 'sarah.chen@grain.internal', date: '2024-11-27', notes: 'UK neobank. Small FX exposure but growing. Warm conversation.', hubspot: null },
-    { firstName: 'Ravi', lastName: 'Kapoor', email: 'r.kapoor@paysend.com', company: 'Paysend', jobTitle: 'Head of FX', icpScore: 86, tags: ['fx_pain', 'decision_maker'], conf: 'FinTech Connect 2024', rep: 'jake.martinez@grain.internal', date: '2024-11-28', notes: 'Global money transfer — 170+ countries, massive FX pain. Hot lead.', hubspot: 'hs_015' },
+    { firstName: 'Amelia', lastName: 'Hughes', email: 'a.hughes@zopa.com', company: 'Zopa', jobTitle: 'CFO', icpScore: 72, tags: ['needs_followup'], conf: 'FinTech Connect 2024', rep: 'sarah.chen@conferenceintel.internal', date: '2024-11-27', notes: 'UK neobank. Small FX exposure but growing. Warm conversation.', hubspot: null },
+    { firstName: 'Ravi', lastName: 'Kapoor', email: 'r.kapoor@paysend.com', company: 'Paysend', jobTitle: 'Head of FX', icpScore: 86, tags: ['fx_pain', 'decision_maker'], conf: 'FinTech Connect 2024', rep: 'jake.martinez@conferenceintel.internal', date: '2024-11-28', notes: 'Global money transfer — 170+ countries, massive FX pain. Hot lead.', hubspot: 'hs_015' },
     // Paris Fintech Forum 2025
-    { firstName: 'Claire', lastName: 'Dubois', email: 'c.dubois@lydia.com', company: 'Lydia', jobTitle: 'VP Finance', icpScore: 68, tags: ['needs_followup'], conf: 'Paris Fintech Forum 2025', rep: 'sarah.chen@grain.internal', date: '2025-01-29', notes: 'French fintech. Growing into EU FX space. Early stage prospect.', hubspot: null },
-    { firstName: 'Ahmed', lastName: 'Benali', email: 'a.benali@cma-cgm.com', company: 'CMA CGM', jobTitle: 'Group Treasurer', icpScore: 91, tags: ['fx_pain', 'decision_maker', 'champion'], conf: 'Paris Fintech Forum 2025', rep: 'sarah.chen@grain.internal', date: '2025-01-28', notes: 'Global shipping giant — massive multi-currency exposure. Champion identified.', hubspot: 'hs_016' },
+    { firstName: 'Claire', lastName: 'Dubois', email: 'c.dubois@lydia.com', company: 'Lydia', jobTitle: 'VP Finance', icpScore: 68, tags: ['needs_followup'], conf: 'Paris Fintech Forum 2025', rep: 'sarah.chen@conferenceintel.internal', date: '2025-01-29', notes: 'French fintech. Growing into EU FX space. Early stage prospect.', hubspot: null },
+    { firstName: 'Ahmed', lastName: 'Benali', email: 'a.benali@cma-cgm.com', company: 'CMA CGM', jobTitle: 'Group Treasurer', icpScore: 91, tags: ['fx_pain', 'decision_maker', 'champion'], conf: 'Paris Fintech Forum 2025', rep: 'sarah.chen@conferenceintel.internal', date: '2025-01-28', notes: 'Global shipping giant — massive multi-currency exposure. Champion identified.', hubspot: 'hs_016' },
     // SWIFT Business Forum 2025
-    { firstName: 'Patrick', lastName: 'O\'Brien', email: 'p.obrien@bankofireland.com', company: 'Bank of Ireland', jobTitle: 'Head of FX & Derivatives', icpScore: 80, tags: ['fx_pain', 'needs_followup'], conf: 'SWIFT Business Forum London 2025', rep: 'sarah.chen@grain.internal', date: '2025-04-23', notes: 'Corporate banking FX desk. Interested in automation tools.', hubspot: null },
-    { firstName: 'Sophie', lastName: 'Larsson', email: 's.larsson@nordea.com', company: 'Nordea', jobTitle: 'Director, FX Solutions', icpScore: 85, tags: ['fx_pain', 'decision_maker'], conf: 'SWIFT Business Forum London 2025', rep: 'sarah.chen@grain.internal', date: '2025-04-24', notes: 'Nordic bank with corporate FX franchise. Active evaluation.', hubspot: 'hs_017' },
+    { firstName: 'Patrick', lastName: 'O\'Brien', email: 'p.obrien@bankofireland.com', company: 'Bank of Ireland', jobTitle: 'Head of FX & Derivatives', icpScore: 80, tags: ['fx_pain', 'needs_followup'], conf: 'SWIFT Business Forum London 2025', rep: 'sarah.chen@conferenceintel.internal', date: '2025-04-23', notes: 'Corporate banking FX desk. Interested in automation tools.', hubspot: null },
+    { firstName: 'Sophie', lastName: 'Larsson', email: 's.larsson@nordea.com', company: 'Nordea', jobTitle: 'Director, FX Solutions', icpScore: 85, tags: ['fx_pain', 'decision_maker'], conf: 'SWIFT Business Forum London 2025', rep: 'sarah.chen@conferenceintel.internal', date: '2025-04-24', notes: 'Nordic bank with corporate FX franchise. Active evaluation.', hubspot: 'hs_017' },
     // EuroFinance 2025
-    { firstName: 'António', lastName: 'Ferreira', email: 'a.ferreira@galp.com', company: 'GALP', jobTitle: 'Treasury Director', icpScore: 82, tags: ['fx_pain'], conf: 'EuroFinance 2025', rep: 'sarah.chen@grain.internal', date: '2025-09-18', notes: 'Portuguese energy — FX across Angola, Brazil, Mozambique.', hubspot: null },
-    { firstName: 'Nadia', lastName: 'Petrov', email: 'n.petrov@rwe.com', company: 'RWE', jobTitle: 'Head of FX Risk', icpScore: 89, tags: ['fx_pain', 'decision_maker', 'needs_followup'], conf: 'EuroFinance 2025', rep: 'sarah.chen@grain.internal', date: '2025-09-17', notes: 'German energy major. Complex EUR/USD/GBP hedging. Requested proposal.', hubspot: 'hs_018' },
+    { firstName: 'António', lastName: 'Ferreira', email: 'a.ferreira@galp.com', company: 'GALP', jobTitle: 'Treasury Director', icpScore: 82, tags: ['fx_pain'], conf: 'EuroFinance 2025', rep: 'sarah.chen@conferenceintel.internal', date: '2025-09-18', notes: 'Portuguese energy — FX across Angola, Brazil, Mozambique.', hubspot: null },
+    { firstName: 'Nadia', lastName: 'Petrov', email: 'n.petrov@rwe.com', company: 'RWE', jobTitle: 'Head of FX Risk', icpScore: 89, tags: ['fx_pain', 'decision_maker', 'needs_followup'], conf: 'EuroFinance 2025', rep: 'sarah.chen@conferenceintel.internal', date: '2025-09-17', notes: 'German energy major. Complex EUR/USD/GBP hedging. Requested proposal.', hubspot: 'hs_018' },
   ]
 
   // Insert repeat contacts
@@ -405,30 +405,30 @@ async function main() {
   // ── Assign reps to upcoming conferences ──────────────────────────────────
   const assignments: Array<{ conf: string; rep: string }> = [
     // Sarah Chen — Europe
-    { conf: 'Money20/20 Europe', rep: 'sarah.chen@grain.internal' },
-    { conf: 'FX Week Europe', rep: 'sarah.chen@grain.internal' },
-    { conf: 'EuroFinance International Treasury', rep: 'sarah.chen@grain.internal' },
-    { conf: 'SWIFT Business Forum London', rep: 'sarah.chen@grain.internal' },
-    { conf: 'Association of Corporate Treasurers (ACT) Annual', rep: 'sarah.chen@grain.internal' },
-    { conf: 'EBAday', rep: 'sarah.chen@grain.internal' },
-    { conf: 'Paris Fintech Forum', rep: 'sarah.chen@grain.internal' },
-    { conf: 'TMS Summit', rep: 'sarah.chen@grain.internal' },
-    { conf: 'FX Markets Europe', rep: 'sarah.chen@grain.internal' },
-    { conf: 'FX Invest Europe', rep: 'sarah.chen@grain.internal' },
+    { conf: 'Money20/20 Europe', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'FX Week Europe', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'EuroFinance International Treasury', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'SWIFT Business Forum London', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'Association of Corporate Treasurers (ACT) Annual', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'EBAday', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'Paris Fintech Forum', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'TMS Summit', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'FX Markets Europe', rep: 'sarah.chen@conferenceintel.internal' },
+    { conf: 'FX Invest Europe', rep: 'sarah.chen@conferenceintel.internal' },
     // Jake Martinez — Americas
-    { conf: 'Money20/20 USA', rep: 'jake.martinez@grain.internal' },
-    { conf: 'AFP Annual Conference', rep: 'jake.martinez@grain.internal' },
-    { conf: 'NACHA Payments', rep: 'jake.martinez@grain.internal' },
-    { conf: 'FX Week US', rep: 'jake.martinez@grain.internal' },
-    { conf: 'SWIFT Business Forum New York', rep: 'jake.martinez@grain.internal' },
-    { conf: 'Currency Research Americas', rep: 'jake.martinez@grain.internal' },
-    { conf: 'Phocuswright Conference', rep: 'jake.martinez@grain.internal' },
-    { conf: 'FIA Expo', rep: 'jake.martinez@grain.internal' },
+    { conf: 'Money20/20 USA', rep: 'jake.martinez@conferenceintel.internal' },
+    { conf: 'AFP Annual Conference', rep: 'jake.martinez@conferenceintel.internal' },
+    { conf: 'NACHA Payments', rep: 'jake.martinez@conferenceintel.internal' },
+    { conf: 'FX Week US', rep: 'jake.martinez@conferenceintel.internal' },
+    { conf: 'SWIFT Business Forum New York', rep: 'jake.martinez@conferenceintel.internal' },
+    { conf: 'Currency Research Americas', rep: 'jake.martinez@conferenceintel.internal' },
+    { conf: 'Phocuswright Conference', rep: 'jake.martinez@conferenceintel.internal' },
+    { conf: 'FIA Expo', rep: 'jake.martinez@conferenceintel.internal' },
     // Priya Nair — APAC + ME (Sibos 2026 intentionally unassigned — Tier A coverage gap for demo)
-    { conf: 'Seamless Middle East', rep: 'priya.nair@grain.internal' },
-    { conf: 'Seamless Asia', rep: 'priya.nair@grain.internal' },
-    { conf: 'Singapore Fintech Festival', rep: 'priya.nair@grain.internal' },
-    { conf: 'Forex Expo Dubai', rep: 'priya.nair@grain.internal' },
+    { conf: 'Seamless Middle East', rep: 'priya.nair@conferenceintel.internal' },
+    { conf: 'Seamless Asia', rep: 'priya.nair@conferenceintel.internal' },
+    { conf: 'Singapore Fintech Festival', rep: 'priya.nair@conferenceintel.internal' },
+    { conf: 'Forex Expo Dubai', rep: 'priya.nair@conferenceintel.internal' },
   ]
 
   for (const a of assignments) {
@@ -452,11 +452,11 @@ async function main() {
 
   console.log('\n🎉 Seed complete!')
   console.log('\nLogin credentials:')
-  console.log('  admin@grain.internal   / admin')
-  console.log('  alex.kim@grain.internal / grain123  (Manager)')
-  console.log('  sarah.chen@grain.internal / grain123  (Sales – Europe)')
-  console.log('  jake.martinez@grain.internal / grain123  (Sales – Americas)')
-  console.log('  priya.nair@grain.internal / grain123  (Sales – APAC)')
+  console.log('  admin@conferenceintel.internal   / admin')
+  console.log('  alex.kim@conferenceintel.internal / intel123  (Manager)')
+  console.log('  sarah.chen@conferenceintel.internal / intel123  (Sales – Europe)')
+  console.log('  jake.martinez@conferenceintel.internal / intel123  (Sales – Americas)')
+  console.log('  priya.nair@conferenceintel.internal / intel123  (Sales – APAC)')
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect())

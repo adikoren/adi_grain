@@ -72,10 +72,10 @@ export default function InvitePage({ params }: { params: { token: string } }) {
     <div className="min-h-screen flex items-center justify-center bg-brand-dark p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <p className="text-3xl mb-2">🌾</p>
+          <p className="text-3xl mb-2">👋</p>
           <h1 className="text-2xl font-bold">You're invited</h1>
           <p className="text-content-muted text-sm mt-1">
-            Join Grain Finance as <span className="text-brand-accent">{invitation?.role?.toLowerCase()}</span>
+            Join as <span className="text-brand-accent">{invitation?.role?.toLowerCase()}</span>
           </p>
           <p className="text-content-muted text-xs mt-1">{invitation?.email}</p>
         </div>

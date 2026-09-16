@@ -12,7 +12,7 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
     const timer = setTimeout(() => controller.abort(), 4000)
     const res = await fetch(url.startsWith('http') ? url : `https://${url}`, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GrainBot/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ConferenceIntelBot/1.0)' },
     })
     clearTimeout(timer)
     if (!res.ok) return null
@@ -69,21 +69,21 @@ export async function POST(req: NextRequest) {
     const websiteText = website ? await fetchWebsiteText(website) : null
     const confContext = conferenceName ? ` attending ${conferenceName}` : conferenceId ? ' at an industry conference' : ''
 
-    const systemPrompt = `You are a sales intelligence assistant at Grain, a fintech company providing FX (foreign exchange) hedging and risk management for businesses. Grain serves PSPs, payment providers, travel companies, banks, and any business with meaningful FX exposure.
+    const systemPrompt = `You are a sales intelligence assistant at a fintech company providing FX (foreign exchange) hedging and risk management for businesses. We serve PSPs, payment providers, travel companies, banks, and any business with meaningful FX exposure.
 
-Your job is to produce a concise, practical company brief for a Grain sales rep before or during a meeting.
+Your job is to produce a concise, practical company brief for a sales rep before or during a meeting.
 
 Return ONLY a JSON object — no code fences, no prose before or after. Use this exact schema:
 {
   "icpSummary": "One-line ICP assessment: e.g. 'Strong ICP fit — PSP with high cross-border volume and multi-currency settlement complexity.'",
   "whatTheyDo": "One sentence: what the company does and who it serves",
-  "grainRelevance": "Why this company is relevant to Grain (FX exposure, payments volume, treasury complexity, etc.)",
+  "grainRelevance": "Why this company is relevant to us (FX exposure, payments volume, treasury complexity, etc.)",
   "market": "Primary market / industry vertical",
   "businessType": "B2B, B2C, or B2B2C",
   "hqLocation": "HQ city and country (e.g. Amsterdam, Netherlands) or null if unknown",
   "fxRelevance": "Specific FX or multi-currency exposure at this company",
   "keyPeople": "Roles to approach (e.g. Head of Treasury, VP Payments, CFO, Head of FX)",
-  "salesAngle": "One concrete opening line or conversation angle for a Grain sales rep",
+  "salesAngle": "One concrete opening line or conversation angle for a sales rep",
   "suggestedPerson": {
     "firstName": null,
     "lastName": null,
@@ -106,7 +106,7 @@ Rules:
     const prompt = `Company: ${company}
 Role to meet: ${jobTitle || 'Unknown'}${confContext}${websiteSection}
 
-Generate a Company Brief for a Grain sales rep.`
+Generate a Company Brief for a sales rep.`
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

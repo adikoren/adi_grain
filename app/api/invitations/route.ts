@@ -17,17 +17,17 @@ async function sendInviteEmail(to: string, inviteUrl: string, invitedBy: string,
   const roleName = role.replace('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
 
   await transporter.sendMail({
-    from: `"Grain" <${user}>`,
+    from: `"Conference Intelligence" <${user}>`,
     to,
-    subject: `You've been invited to Grain`,
+    subject: `You've been invited to Conference Intelligence`,
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#0d1929;color:#e8edf5;border-radius:12px;">
         <div style="margin-bottom:24px;">
-          <span style="font-size:20px;font-weight:700;color:#fff;letter-spacing:-0.5px;">grain</span>
+          <span style="font-size:20px;font-weight:700;color:#fff;letter-spacing:-0.5px;">CI</span>
         </div>
-        <h2 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 12px;">You're invited to join Grain</h2>
+        <h2 style="font-size:22px;font-weight:700;color:#fff;margin:0 0 12px;">You're invited to join Conference Intelligence</h2>
         <p style="color:#8fa3bf;margin:0 0 8px;"><strong style="color:#e8edf5;">${invitedBy}</strong> has invited you as a <strong style="color:#e8edf5;">${roleName}</strong>.</p>
-        <p style="color:#8fa3bf;margin:0 0 28px;">Grain is a conference intelligence tool for tracking leads and planning events.</p>
+        <p style="color:#8fa3bf;margin:0 0 28px;">Conference Intelligence is a tool for tracking leads and planning events.</p>
         <a href="${inviteUrl}" style="display:inline-block;background:#4A90D9;color:#fff;font-weight:600;padding:13px 30px;border-radius:8px;text-decoration:none;font-size:15px;">Accept invitation →</a>
         <p style="color:#4e6885;font-size:12px;margin:28px 0 0;">Link expires in 7 days. If you weren't expecting this, ignore it.</p>
       </div>

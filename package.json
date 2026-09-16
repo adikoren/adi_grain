@@ -1,7 +1,7 @@
 {
-  "name": "grain-conference-intel",
+  "name": "conference-intelligence",
   "version": "1.0.0",
-  "description": "Conference Intelligence Tool for Grain Sales Team",
+  "description": "Conference Intelligence Tool for fintech sales teams",
   "private": true,
   "prisma": {
     "seed": "tsx prisma/seed.ts"

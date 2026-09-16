@@ -35,9 +35,9 @@ export async function draftFollowUpEmail(lead: {
   conferenceName?: string
   repName?: string | null
 }): Promise<string> {
-  const signOff = lead.repName || 'The Grain Team'
+  const signOff = lead.repName || 'The Team'
 
-  const system = `You are an expert B2B sales rep at Grain, a fintech company that helps businesses
+  const system = `You are an expert B2B sales rep at a fintech company that helps businesses
 manage FX (foreign exchange) risk through embedded hedging. Write concise, warm,
 personalised follow-up emails. Keep under 150 words. No fluff.`
 
@@ -59,7 +59,7 @@ export async function summariseRelationshipArc(appearances: {
   company?: string | null
   notes?: string | null
 }[]): Promise<string> {
-  const system = `You are a sales intelligence analyst at Grain, a fintech FX hedging company.
+  const system = `You are a sales intelligence analyst at a fintech FX hedging company.
 Analyse cross-conference contact patterns and give a brief, actionable "closing signal" interpretation.
 Be direct. Max 3 sentences. Label the contact as Champion / Evaluator / Tire-kicker / Re-engaging.`
 
@@ -82,11 +82,11 @@ export async function aiScoreConference(conf: {
   estimatedAudience?: number | null
   website?: string | null
 }): Promise<{ score: number; reasoning: string }> {
-  const system = `You are a sales strategist at Grain, a fintech company serving PSPs, payment providers,
+  const system = `You are a sales strategist at a fintech company serving PSPs, payment providers,
 travel wholesalers, and companies with FX exposure. Score conference ICP fit 0-100.
 Return JSON: {"score": number, "reasoning": "1-2 sentence explanation"}`
 
-  const prompt = `Score this conference for Grain's ICP:
+  const prompt = `Score this conference for our ICP:
 Name: ${conf.name}
 Location: ${conf.city}, ${conf.country}
 Verticals: ${conf.verticals.join(', ')}
@@ -122,11 +122,11 @@ export async function identifyConferenceAttendees(conf: {
   companyType: string | null
   source: string
 }>> {
-  const system = `You are a sales intelligence analyst at Grain, a fintech company providing FX hedging and risk management for businesses with currency exposure.
+  const system = `You are a sales intelligence analyst at a fintech company providing FX hedging and risk management for businesses with currency exposure.
 
-Identify companies likely attending this conference that are relevant prospects for Grain.
+Identify companies likely attending this conference that are relevant prospects for us.
 
-Grain's target customers:
+Target customers:
 - Payment Service Providers (PSPs) with cross-border flows
 - Banks, broker-dealers, FX venues
 - Treasury-heavy corporates with global operations
@@ -166,7 +166,7 @@ Date: ${conf.startDate || 'upcoming'}
 Verticals: ${conf.verticals.join(', ') || 'fintech, payments'}
 Audience size: ${conf.estimatedAudience || 'unknown'}${contentSection}
 
-Return a JSON array of companies attending this conference relevant to Grain.`
+Return a JSON array of companies attending this conference relevant to us.`
 
   const raw = await callLLM(prompt, system)
   return parseJsonArray(raw)

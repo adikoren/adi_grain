@@ -20,10 +20,10 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
-        // Special admin shorthand: allow "admin" as email mapped to admin@grain.internal
+        // Special admin shorthand: allow "admin" as email mapped to admin@conferenceintel.internal
         const email =
           credentials.email === 'admin'
-            ? 'admin@grain.internal'
+            ? 'admin@conferenceintel.internal'
             : credentials.email.toLowerCase()
 
         const user = await db.user.findUnique({ where: { email } })

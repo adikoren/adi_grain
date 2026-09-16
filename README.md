@@ -1,8 +1,14 @@
-# Grain Finance — Conference Intelligence Tool
+# Conference Intelligence Tool
 
-A sales intelligence platform for Grain Finance's field team to track fintech conferences, capture leads, and surface trip opportunities.
+A sales intelligence platform for a fintech field sales team to track conferences, capture leads, and surface trip opportunities.
 
 **Stack:** Next.js 14 · Prisma + SQLite · NextAuth v4 · Tailwind CSS · Tesseract.js (OCR) · Fuse.js (dedup) · Docker
+
+> **Demo storage note:** the live demo runs on seeded SQLite with no
+> persistent volume attached — by design, for a lightweight portfolio demo.
+> The database resets to the baked-in seed data on every redeploy (and on
+> container restart). A production deployment would instead use a
+> persistent volume or migrate to Postgres so real data survives deploys.
 
 ---
 
@@ -40,11 +46,11 @@ The first `docker compose build` takes 3–5 minutes (it compiles the app and se
 
 | Email | Password | Role |
 |---|---|---|
-| `admin@grain.internal` | `admin` | Admin |
-| `alex.kim@grain.internal` | `grain123` | Manager |
-| `sarah.chen@grain.internal` | `grain123` | Sales — Europe |
-| `jake.martinez@grain.internal` | `grain123` | Sales — Americas |
-| `priya.nair@grain.internal` | `grain123` | Sales — APAC |
+| `admin@conferenceintel.internal` | `admin` | Admin |
+| `alex.kim@conferenceintel.internal` | `intel123` | Manager |
+| `sarah.chen@conferenceintel.internal` | `intel123` | Sales — Europe |
+| `jake.martinez@conferenceintel.internal` | `intel123` | Sales — Americas |
+| `priya.nair@conferenceintel.internal` | `intel123` | Sales — APAC |
 
 ### Stopping and resetting
 
@@ -57,6 +63,11 @@ docker compose down -v
 ```
 
 The SQLite database lives in the `grain_data` Docker volume at `/data/grain.db`. On first start the pre-seeded template is copied there automatically.
+
+> Note: `grain_data`/`grain.db` are internal filesystem identifiers, kept as-is
+> intentionally — renaming them would change the DB path baked into the
+> live deployment's Docker image and risk an unintended data reset on next
+> redeploy. Renaming is safe to do later as a deliberate, verified step.
 
 ---
 
@@ -90,11 +101,11 @@ The SQLite database lives in the `grain_data` Docker volume at `/data/grain.db`.
 ```bash
 # Install flyctl: https://fly.io/docs/hands-on/install-flyctl/
 
-fly launch --name grain-intel   # generates fly.toml, skip postgres
+fly launch --name conference-intel   # generates fly.toml, skip postgres
 fly volumes create grain_data --size 1 --region <your-region>
 fly secrets set \
   NEXTAUTH_SECRET="$(openssl rand -base64 32)" \
-  NEXTAUTH_URL="https://grain-intel.fly.dev" \
+  NEXTAUTH_URL="https://conference-intel.fly.dev" \
   DATABASE_URL="file:/data/grain.db"
 fly deploy
 ```
@@ -123,8 +134,8 @@ The app uses SQLite, which only supports one writer at a time. Run a **single in
 ### 2. Install
 
 ```bash
-git clone https://github.com/YOUR_ORG/grain-conference-intel.git
-cd grain-conference-intel
+git clone https://github.com/YOUR_ORG/conference-intelligence.git
+cd conference-intelligence
 npm install
 ```
 
@@ -201,7 +212,7 @@ If no key is set, the app uses rule-based ICP scoring (no AI calls).
 ## Project Structure
 
 ```
-grain/
+conference-intelligence/
 ├── app/                    # Next.js App Router
 │   ├── (dashboard)/        # Sales person screens + manager dashboard
 │   ├── manager/            # Manager-only screens (planning, hubspot, users)
@@ -234,4 +245,4 @@ grain/
 - **Conference discovery:** `POST /api/conferences/discover` — AI-powered
 - **Trips:** `POST /api/trips` with `action: recalculate` or `action: assign`
 
-Built for Grain Finance's sales team.
+Built for a fintech sales team.

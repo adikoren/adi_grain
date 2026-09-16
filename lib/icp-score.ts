@@ -4,7 +4,7 @@
 //   icpCompanyDensity    0–30  (target companies expected to attend)
 //   decisionMakerQuality 0–25  (C-suite / VP density)
 //   fxPainRelevance      0–25  (FX / treasury / cross-border content)
-//   agendaRelevance      0–10  (sessions matching Grain topics)
+//   agendaRelevance      0–10  (sessions matching relevant topics)
 //   networkingQuality    0–10  (structured networking, hosted buyers)
 //                      ──────
 //   Max                   100

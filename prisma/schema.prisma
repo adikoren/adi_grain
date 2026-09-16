@@ -254,13 +254,13 @@ model CompanyEnrichment {
   id             String   @id @default(cuid())
   company        String   @unique  // normalized lowercase
   displayName    String            // original casing as first seen
-  icpSummary     String?           // one-liner: why relevant to Grain
+  icpSummary     String?           // one-liner: why this company is relevant
   whatTheyDo     String?
   market         String?
   businessType   String?
   hqLocation     String?           // HQ city / country
   fxRelevance    String?
-  grainRelevance String?
+  grainRelevance String?           // NOTE: field name kept as-is (DB column) to avoid a migration; UI label is neutral ("Why us?")
   keyPeople      String?
   salesAngle     String?
   website        String?

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "=== Grain Finance Intelligence ==="
+echo "=== Conference Intelligence ==="
 
 # Extract file path from DATABASE_URL (strips the "file:" prefix)
 DB_FILE="${DATABASE_URL#file:}"

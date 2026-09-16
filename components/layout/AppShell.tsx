@@ -111,7 +111,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="rounded-sm bg-white/40" />
             <div className="rounded-sm bg-brand-accent" />
           </div>
-          <span className="text-base font-semibold text-white tracking-tight">grain</span>
+          <span className="text-base font-semibold text-white tracking-tight">CI</span>
         </Link>
 
         {/* Nav */}
@@ -187,7 +187,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <button onClick={() => setOpen(true)} className="text-content-secondary p-1">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
-          <span className="text-sm font-semibold text-content-primary">grain</span>
+          <span className="text-sm font-semibold text-content-primary">CI</span>
           <div className="w-5" />
         </div>
         <div className="flex-1 overflow-y-auto">

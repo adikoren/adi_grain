@@ -3,8 +3,8 @@ import './globals.css'
 import { Providers } from './providers'
 
 export const metadata: Metadata = {
-  title: 'Grain Conference Intel',
-  description: 'Conference Intelligence Tool for Grain Sales Team',
+  title: 'Conference Intelligence',
+  description: 'Conference Intelligence Tool for sales teams',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

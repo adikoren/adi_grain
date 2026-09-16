@@ -70,7 +70,7 @@ describe('draftFollowUpEmail', () => {
     expect(userMsg).toContain('Jake Martinez')
   })
 
-  it('uses "The Grain Team" sign-off when repName is null', async () => {
+  it('uses "The Team" sign-off when repName is null', async () => {
     mockDb.systemConfig.findUnique.mockResolvedValue(openaiConfig)
     let capturedBody: any
     mockFetch.mockImplementation(async (_url: string, opts: any) => {
@@ -79,7 +79,7 @@ describe('draftFollowUpEmail', () => {
     })
     await draftFollowUpEmail({ firstName: 'Alice', lastName: 'Smith', company: 'Acme', repName: null })
     const userMsg = capturedBody.messages.find((m: any) => m.role === 'user')?.content || ''
-    expect(userMsg).toContain('The Grain Team')
+    expect(userMsg).toContain('The Team')
   })
 
   it('includes conference name in prompt when provided', async () => {

@@ -1168,7 +1168,7 @@ interface CompanyBrief {
 
 const BRIEF_FIELDS: { key: keyof CompanyBrief; label: string; icon: string }[] = [
   { key: 'whatTheyDo',     label: 'What they do',    icon: '🏢' },
-  { key: 'grainRelevance', label: 'Why Grain?',       icon: '💡' },
+  { key: 'grainRelevance', label: 'Why us?',           icon: '💡' },
   { key: 'market',         label: 'Market',           icon: '🌍' },
   { key: 'businessType',   label: 'B2B / B2C',        icon: '🔗' },
   { key: 'hqLocation',     label: 'HQ',               icon: '📍' },

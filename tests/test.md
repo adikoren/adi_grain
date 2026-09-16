@@ -1,4 +1,4 @@
-# adi_grain — Testing Guide
+# Conference Intelligence — Testing Guide
 
 ## Approach
 
@@ -42,7 +42,7 @@
 - calls OpenAI API when provider is OPENAI
 - returns email draft string from Anthropic response
 - signs off with repName when provided
-- uses "The Grain Team" sign-off when repName is null
+- uses "The Team" sign-off when repName is null
 - includes conference name in prompt when provided
 - includes meeting notes in prompt when provided
 - throws when Anthropic returns error response

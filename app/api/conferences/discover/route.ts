@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   for (const url of SOURCES) {
     try {
       const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GrainBot/1.0)' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ConferenceIntelBot/1.0)' },
         signal: AbortSignal.timeout(10000),
       })
       if (!res.ok) { sourceErrors++; continue }

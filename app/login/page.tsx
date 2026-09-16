@@ -68,7 +68,7 @@ function LoginForm() {
               <div className="rounded-sm bg-white/40" />
               <div className="rounded-sm bg-brand-accent" />
             </div>
-            <span className="text-xl font-semibold text-white tracking-tight">grain</span>
+            <span className="text-xl font-semibold text-white tracking-tight">CI</span>
           </div>
           <h1 className="text-3xl font-bold text-white mb-3 leading-tight">
             Conference<br />Intelligence
@@ -99,7 +99,7 @@ function LoginForm() {
               <div className="rounded-sm bg-brand-navy/40" />
               <div className="rounded-sm bg-brand-accent" />
             </div>
-            <span className="text-xl font-semibold text-brand-navy tracking-tight">grain</span>
+            <span className="text-xl font-semibold text-brand-navy tracking-tight">CI</span>
           </div>
 
           <h2 className="text-xl font-semibold text-content-primary mb-1">
